@@ -1,6 +1,6 @@
 ---
 title: leanSpec → Lean4 定理証明 命題リスト
-last_updated: 2026-05-01
+last_updated: 2026-05-03
 tags:
   - lean4
   - formal-verification
@@ -17,43 +17,54 @@ leanSpec は Lean Ethereum コンセンサスの Python 仕様。
 クライアント実装の安全性を担保するため、仕様レベルで成立すべき**命題**を抽出し、Lean4 でこれを定理証明する。
 
 - **目的**: 安全なクライアント仕様の設計
-- **方針**: 具体的なケース (関数単位の入出力命題) から始め、徐々に抽象度を上げる
-- **本文書の役割**: Lean4 化する命題の優先順位付きカタログ
+- **方針**: 関数単位の入出力命題から始め、領域横断の不変量へ広げる
+- **本文書の役割**: Lean4 化する命題のカタログ
     - 各命題に「自然言語 + 半形式 (∀/⇒) + Lean4 skeleton」を併記
-    - Tier 1/2/3 で実装難易度を区分
-    - 対象は 4 領域: Consensus core / SSZ・基本型 / Validator duties / Networking・Sync
+    - **領域別** (Lean4 ディレクトリ構成と 1:1 対応) で分類
+    - 対象は 8 領域: SSZ・基本型 / Containers / State Transition / Fork Choice / Validator / Networking / Storage / Sync
+    - **対象外**: 暗号プリミティブ・KoalaBear 体・XMSS 署名スキームの代数的性質は **Arklib** 側で扱う。本文書では呼び出し側 (e.g. SSZ-7 の `axiom` 化、VAL-5 の鍵準備状態管理) のみカバー。
 
 ## アプローチ
 
-### 命題の抽象度レベル
+### 各命題の項目
 
-- **L1 (具体)**: 計算結果の等式。例: `process_slots(s, n).slot = s.slot + n`
-- **L2 (中)**: 関数間の関係・不変量保存。例: `process_block` 後 `latest_justified.slot` 単調増加
-- **L3 (抽象)**: 系全体の性質。例: fork choice は acyclic、finalization は irreversible
+各命題ブロックは以下の項目で構成される (出現順)。`出典` / `関数` / `自然言語` は省略可、`半形式` / `Lean4` は基本的に必須。
 
-本ドキュメントは **L1 を中心に L2 を一部含む**。L3 は次フェーズで段階的に追加。
+- **出典**: 命題の根拠となる leanSpec (Python) ソースのパスと行番号 (例: `src/lean_spec/forks/lstar/containers/state/state.py:113-180`)。命題が「Python 仕様のどの挙動を抜き出したものか」を追跡可能にする。
+- **関数**: 命題本文 (半形式 / Lean4 stub) に登場する **leanSpec 由来の関数** が何をする関数かを 1 行で説明する補足。命題単体では関数名から役割が読み取れないため (例: `is_justifiable_after` だけ見ても何の判定か不明) に付ける。`encode`/`decode` のような自明な関数では省略する。
+- **自然言語**: 命題の主張を平易な日本語の散文で記述。論理構造を意識せず「結局何が言いたいか」を伝える層。
+- **半形式**: 量化子 (`∀`, `∃`)、含意 (`⇒`, `⇔`)、所属 (`∈`) 等の数学記号と leanSpec 関数名を混在させて命題を記述。Lean4 の構文と自然言語の中間レベルで、論理構造 (前提・結論・量化スコープ) を曖昧さなく示すことが目的。
+- **Lean4**: Lean4 で書いた命題の stub。証明本体は `sorry` で保留:
 
-### Tier の意味
+  ```lean
+  -- 命題の Lean4 stub。証明本体は `sorry` で保留。
+  theorem foo (s : State) : P s := by sorry
+  ```
 
-- **Tier 1 (低難度)**: 1〜2 日で Lean4 化可能。前提なし。最初の足場。
-- **Tier 2 (中難度)**: 1 週間規模。Tier 1 の lemma に依存。コア安全性。
-- **Tier 3 (高難度)**: 抽象度高、または暗号学的仮定 (collision resistance) を `axiom` として置く必要あり。
+  実コードでは `Std`, `Mathlib` または独自 `LeanSpec.Prelude` への依存になる想定。SSZ・State・Block 等の型は別ファイル (`LeanSpec.Containers.*`) で別途定義する。
 
-### Lean4 skeleton 表記
+### 命題 ID 規約
 
-```lean
--- 命題の Lean4 stub。証明本体は `sorry` で保留。
-theorem foo (s : State) : P s := by sorry
-```
+`<DOMAIN>-<番号>` の形式。`DOMAIN` は所属する領域の略号:
 
-実コードでは `Std`, `Mathlib` または独自 `LeanSpec.Prelude` への依存になる想定。
-SSZ・State・Block 等の型は別ファイル (`LeanSpec.Containers.*`) で別途定義。
+| Prefix | 領域 | Lean4 配置 |
+|---|---|---|
+| `SSZ` | SSZ・基本型 | `LeanSpec/Types`, `LeanSpec/SSZ` |
+| `CONT` | コンテナ (Checkpoint, Slot algebra 等) | `LeanSpec/Containers` |
+| `ST` | State transition | `LeanSpec/Forks/Lstar/State` |
+| `FC` | Fork choice | `LeanSpec/Forks/Lstar/Store` |
+| `VAL` | Validator duties | `LeanSpec/Validator` |
+| `NET` | Networking (req/resp) | `LeanSpec/Networking` |
+| `STOR` | Storage | `LeanSpec/Storage` |
+| `SYNC` | Sync FSM | `LeanSpec/Sync` |
 
-## Tier 1: 最初に Lean4 化する命題 (低難度)
+## SSZ・基本型
 
-### T1-A. SSZ・基本型の round-trip と範囲制約
+**SSZ (Simple Serialize)** は Ethereum コンセンサスレイヤーで使う決定論的シリアライゼーション形式。各値は (1) バイト列への encode、(2) Merkle 化による `hash_tree_root` (32 バイトのコミットメント) の 2 通りで一意に表現される。基本型は `Boolean`, `Uint{8,16,32,64}`, 固定長 `Bytes32`, 可変長 `List`, 固定長 `Vector`, ビット列 `Bitlist/Bitvector`。
 
-#### T1-A.1: Boolean encode/decode round-trip
+ここでの命題は **エンコーダの数学的健全性** を保証する: round-trip (`decode ∘ encode = id`)、長さ不変量 (固定長型は常に N バイトで encode される)、範囲制約 (`Uint64` の値が `[0, 2^64)` に収まる) など。これらが崩れると、上位層 (Container, hash_tree_root, fork choice の入力) が全て信頼できなくなる。実装は `LeanSpec/Types/*`, `LeanSpec/SSZ/*`。
+
+### SSZ-1: Boolean はエンコード/デコードで元に戻る
 
 - 出典: `src/lean_spec/types/boolean.py:87-103`
 - 自然言語: 任意の真偽値 `b` について、エンコード後にデコードすると元に戻る。
@@ -65,7 +76,7 @@ theorem boolean_roundtrip (b : Boolean) :
     Boolean.decode (Boolean.encode b) = some b := by sorry
 ```
 
-#### T1-A.2: Uint64 範囲制約
+### SSZ-2: Uint64 の値は [0, 2^64) に収まる
 
 - 出典: `src/lean_spec/types/uint.py:22-38`
 - 自然言語: Uint64 の値は常に `[0, 2^64)` の範囲にある。
@@ -77,7 +88,7 @@ theorem uint64_range (v : Uint64) :
     v.toNat < 2 ^ 64 := by sorry
 ```
 
-#### T1-A.3: Uint64 round-trip (8 byte LE)
+### SSZ-3: Uint64 は 8 バイト LE エンコード/デコードで元に戻る
 
 - 出典: `uint.py:84-126`
 - 半形式: `∀ v : Uint64. decode(encode(v)) = some v ∧ |encode(v)| = 8`
@@ -91,7 +102,7 @@ theorem uint64_encode_length (v : Uint64) :
     (Uint64.encode v).length = 8 := by sorry
 ```
 
-#### T1-A.4: Bytes32 固定長
+### SSZ-4: Bytes32 は常に 32 バイトである
 
 - 出典: `src/lean_spec/types/byte_arrays.py:59-76`
 - 半形式: `∀ bs : Bytes32. |bs| = 32 ∧ decode(encode(bs)) = some bs`
@@ -101,7 +112,7 @@ theorem uint64_encode_length (v : Uint64) :
 theorem bytes32_length (bs : Bytes32) : bs.size = 32 := by sorry
 ```
 
-#### T1-A.5: SSZVector 長さ不変量
+### SSZ-5: SSZVector の長さは型パラメータ n に等しい
 
 - 出典: `src/lean_spec/types/collections.py:137-158`
 - 半形式: `∀ T n (v : SSZVector T n). v.data.length = n`
@@ -112,9 +123,10 @@ theorem sszvector_length {T : Type} {n : Nat} (v : SSZVector T n) :
     v.data.length = n := by sorry
 ```
 
-#### T1-A.6: get_power_of_two_ceil
+### SSZ-6: 2 の冪への切り上げは入力以上の最小値になる
 
 - 出典: `src/lean_spec/subspecs/ssz/utils.py:10-14`
+- 関数: `ceilPow2(x)` — `x` 以上の最小の 2 の冪を返す (Merkle 木のリーフ数を 2 冪に揃えるパディング計算で使う)
 - 半形式: `∀ x > 0. let p = ceilPow2 x in p ≥ x ∧ ∃ k. p = 2^k ∧ (k = 0 ∨ 2^(k-1) < x)`
 - Lean4:
 
@@ -124,9 +136,25 @@ theorem ceil_pow2_minimal (x : Nat) (h : 0 < x) :
       (k = 0 ∨ 2 ^ (k - 1) < x) := by sorry
 ```
 
-### T1-B. Slot/Checkpoint の代数的性質
+### SSZ-7: Merkle root 計算は決定的である
 
-#### T1-B.1: Checkpoint の全順序 (slot ベース)
+- 出典: `src/lean_spec/subspecs/ssz/hash.py:34-160`
+- 半形式: 純関数性は関数定義から自動。collision resistance は `axiom`。
+- Lean4:
+
+```lean
+axiom HashTreeRoot.collisionResistance :
+    ∀ x y, hashTreeRoot x = hashTreeRoot y → x = y
+-- 注: 厳密な定理ではなく、暗号学的仮定として使う
+```
+
+## コンテナ (Containers)
+
+**Container** は SSZ の合成型で、名前付きフィールドを持つ構造体 (Solidity の `struct` 相当)。コンセンサスレイヤーの **on-chain / on-wire データ構造** はすべて Container として定義される: `Checkpoint` (root + slot のチェーン上のポインタ)、`BlockHeader`, `AttestationData`, `Attestation`, `AggregatedAttestation` 等。
+
+特に `Checkpoint` は finality 機構の核 — fork choice は「どの checkpoint を justified / finalized とみなすか」で head を決定するため、Checkpoint 同士の **全順序** や、ある finalized から見て target が **justifiable な距離** (`δ ≤ 5`、`δ = k²`、`δ = k(k+1)` の disjunction) かが命題のターゲットになる。実装は `LeanSpec/Containers/*`。
+
+### CONT-1: Checkpoint の順序は slot で決まる
 
 - 出典: `src/lean_spec/forks/lstar/containers/checkpoint.py`
 - 半形式: `∀ c1 c2. c1 < c2 ⇔ c1.slot < c2.slot` (root は tie-break 用ではない)
@@ -137,9 +165,10 @@ theorem checkpoint_lt_iff_slot_lt (c1 c2 : Checkpoint) :
     c1 < c2 ↔ c1.slot < c2.slot := by sorry
 ```
 
-#### T1-B.2: is_justifiable_after の 3 条件 disjunction
+### CONT-2: justifiable は 3 種類の slot 距離のいずれかで成立する
 
 - 出典: `src/lean_spec/forks/lstar/containers/slot.py`
+- 関数: `is_justifiable_after(finalized, target)` — finalized checkpoint slot から見て target slot が justifiable な距離にあるかを判定 (LMD-CASPER の justification 候補性チェック)
 - 自然言語: target slot が finalized から `δ ≤ 5`、`δ = k²`、`δ = k(k+1)` のいずれかなら justifiable。
 - 半形式: `∀ f t. is_justifiable_after f t ⇔ (let δ = t-f in δ ≤ 5 ∨ ∃k. δ = k*k ∨ ∃k. δ = k*(k+1))`
 - Lean4:
@@ -152,75 +181,16 @@ theorem justifiable_iff
       δ ≤ 5 ∨ (∃ k, δ = k * k) ∨ (∃ k, δ = k * (k + 1)) := by sorry
 ```
 
-#### T1-B.3: Round-robin proposer
+## State Transition
 
-- 出典: `process_block_header` (`state.py:182-323`)
-- 半形式: `∀ slot n. n > 0 ⇒ proposer_index slot n = slot mod n`
-- Lean4:
+**State Transition Function (STF)** は「現在の `BeaconState` + 入力 `Block` → 次の `BeaconState`」を計算する純関数で、コンセンサスの中核。`process_slots` (slot を進める空遷移) と `process_block` (ブロック適用) の合成で表される。
 
-```lean
-theorem proposer_index_round_robin (slot : Slot) (n : Nat) (h : 0 < n) :
-    ValidatorIndex.proposerFor slot n = ValidatorIndex.mk (slot.toNat % n) := by sorry
-```
+ここでの命題は **STF が想定どおりに状態を前進させる** ことを保証する: `process_slots` 後に `state.slot` が target に達する、`process_block_header` 後に `latest_block_header.slot` がブロックの slot と一致する、justified/finalized の slot は遷移をまたいで単調非減少、`justified.slot ≥ finalized.slot` が常に成立する、最終的に **finalization は不可逆** (一度 finalize した checkpoint より古い slot に巻き戻ることはない) など。これらが崩れると、forking 攻撃や reorg の防御が破れる。実装は `LeanSpec/Forks/Lstar/State/*`。
 
-### T1-C. Validator duties の単純不変量
-
-#### T1-C.1: Dual-key 分離
-
-- 出典: `src/lean_spec/subspecs/validator/service.py:15-29, 376-452`
-- 半形式: `∀ vid. proposalKey(vid) ≠ attestationKey(vid)`
-- Lean4:
-
-```lean
-theorem dual_key_distinct (vid : ValidatorIndex) (reg : KeyRegistry) :
-    reg.proposalKey vid ≠ reg.attestationKey vid := by sorry
-```
-
-#### T1-C.2: 1 スロット 1 提案者
-
-- 出典: `validator/service.py:223-308`
-- 半形式: `∀ slot n. (n > 0 ⇒ ∃! vid < n. isProposer vid slot n)`
-- Lean4:
-
-```lean
-theorem unique_proposer (slot : Slot) (n : Nat) (h : 0 < n) :
-    ∃! vid : Fin n, ValidatorIndex.isProposerFor vid slot := by sorry
-```
-
-### T1-D. Networking 境界値
-
-#### T1-D.1: BlocksByRange 応答長上限
-
-- 出典: `src/lean_spec/subspecs/networking/reqresp/handler.py:283-287`
-- 半形式: `∀ req resp. handle req = ok resp ⇒ resp.length ≤ min(req.count, MAX_REQUEST_BLOCKS)`
-- Lean4:
-
-```lean
-theorem blocks_by_range_bounded
-    (req : BlocksByRangeRequest) (resp : List Block)
-    (h : Handler.handle req = .ok resp) :
-    resp.length ≤ min req.count MAX_REQUEST_BLOCKS := by sorry
-```
-
-#### T1-D.2: ペイロードサイズ上限
-
-- 出典: `reqresp/codec.py:121-122`
-- 半形式: `∀ payload. decode payload = ok _ ⇒ payload.length ≤ MAX_PAYLOAD_SIZE`
-- Lean4:
-
-```lean
-theorem payload_size_bound (payload : ByteArray) (msg : Message)
-    (h : Codec.decode payload = .ok msg) :
-    payload.size ≤ MAX_PAYLOAD_SIZE := by sorry
-```
-
-## Tier 2: コア不変量 (中難度)
-
-### T2-A. State Transition の単調性
-
-#### T2-A.1: process_slots は slot を target に進める
+### ST-1: 空 slot 進行で state.slot は target になる
 
 - 出典: `src/lean_spec/forks/lstar/containers/state/state.py:113-180`
+- 関数: `process_slots(state, target)` — state を target slot まで空 (ブロックなし) で繰り返し前進させる
 - 半形式: `∀ s target. s.slot ≤ target ⇒ (process_slots s target).slot = target`
 - Lean4:
 
@@ -230,9 +200,10 @@ theorem process_slots_advances (s : State) (target : Slot)
     (State.processSlots s target).slot = target := by sorry
 ```
 
-#### T2-A.2: process_block_header は block.slot に揃える
+### ST-2: ブロックヘッダ適用で最新ヘッダ slot はブロック slot と一致する
 
 - 出典: `state.py:182-323`
+- 関数: `process_block_header(state, block)` — block のヘッダ部分を state に適用し `latest_block_header` を更新
 - 半形式: `process_block_header s b = ok s' ⇒ s'.latest_block_header.slot = b.slot`
 - Lean4:
 
@@ -243,9 +214,10 @@ theorem process_block_header_slot
     s'.latestBlockHeader.slot = b.slot := by sorry
 ```
 
-#### T2-A.3: Checkpoint slot の単調性
+### ST-3: Checkpoint slot は遷移をまたいで単調非減少である
 
 - 出典: `state.py` (process 全般)
+- 関数: `stateTransition(state, block)` — `process_slots` と `process_block` の合成。1 ブロック分の状態遷移
 - 半形式: `∀ s s'. s' = stateTransition s _ ⇒ s'.latest_justified.slot ≥ s.latest_justified.slot ∧ s'.latest_finalized.slot ≥ s.latest_finalized.slot`
 - Lean4:
 
@@ -257,7 +229,7 @@ theorem checkpoint_monotone
     s.latestFinalized.slot ≤ s'.latestFinalized.slot := by sorry
 ```
 
-#### T2-A.4: justified.slot ≥ finalized.slot 保存
+### ST-4: justified slot は常に finalized slot 以上である
 
 - 半形式: `∀ s. s.latest_justified.slot ≥ s.latest_finalized.slot` が任意の reachable state で成立
 - Lean4:
@@ -267,11 +239,35 @@ theorem justified_ge_finalized (s : State) (hreach : Reachable s) :
     s.latestJustified.slot ≥ s.latestFinalized.slot := by sorry
 ```
 
-### T2-B. Fork choice の決定性と topology
+### ST-5: 状態遷移関数は純関数である
 
-#### T2-B.1: head 選択の決定性 (純関数性)
+- 関数: `transition(state, block)` — ST-3 の `stateTransition` の別名。同一引数なら必ず同一結果
+- 半形式: `∀ s b. transition s b = transition s b` (副作用なし)
+- Lean4: `@[simp]` 補題として書く。
+
+### ST-6: Finalization は不可逆である
+
+- 関数: `transition(state, block)` — ST-3 と同義の状態遷移関数
+- 半形式: `∀ s s'. s' = transition s _ ⇒ ¬(s'.latest_finalized.slot < s.latest_finalized.slot)`
+- Lean4:
+
+```lean
+theorem finalization_irreversible
+    (s s' : State) (b : Block)
+    (h : State.transition s b = .ok s') :
+    s.latestFinalized.slot ≤ s'.latestFinalized.slot := by sorry
+```
+
+## Fork Choice
+
+**Fork choice** は複数の有効ブロック候補がある時、どの枝が canonical chain かを決めるアルゴリズム。Lean Ethereum (lstar) では **LMD-GHOST** ベース: 最新の attestation の重みを集計し、justified checkpoint から下流で最も重い枝を head とする。`Store` は fork choice の入力を保持する状態 — ブロック集合、attestation キャッシュ、最新の justified/finalized checkpoint。
+
+ここでの命題は **fork choice の整合性** を保証する: `compute_head` は同じ Store に対し決定的、選ばれた head は必ず latest_justified の子孫、attestation の `source.slot ≤ target.slot ≤ head.slot` という topological 制約、ブロック関係グラフは acyclic (`parent_root` の連鎖に循環なし)、ブロック生成ループは有限ステップで停止する、など。これらが崩れると head が不定になり、ネットワークが split する。実装は `LeanSpec/Forks/Lstar/Store/*`。
+
+### FC-1: head 選択は決定的である (純関数)
 
 - 出典: `src/lean_spec/forks/lstar/store.py:639-762`
+- 関数: `Store.computeHead(store)` — Store から LMD-GHOST で canonical head の root を計算
 - 半形式: 同じ store 状態に対し `compute_head` は常に同じ結果を返す。
 - Lean4:
 
@@ -281,8 +277,11 @@ theorem compute_head_deterministic (st : Store) :
 -- 実質的には: 純関数として well-formed であることを証明する別 lemma に展開
 ```
 
-#### T2-B.2: head は latest_justified の子孫
+### FC-2: head は最新の justified checkpoint の子孫である
 
+- 関数:
+  - `Store.computeHead(store)`: Store から LMD-GHOST で canonical head の root を計算
+  - `isAncestorOrEqual(store, a, b)`: a が store 上で b の祖先または同一かを判定
 - 半形式: `∀ st. Store.computeHead st = h ⇒ isAncestorOrEqual st h st.latestJustified.root`
 - Lean4:
 
@@ -292,9 +291,10 @@ theorem head_descends_from_justified (st : Store) (h : Bytes32)
     Store.isAncestorOrEqual st st.latestJustified.root h := by sorry
 ```
 
-#### T2-B.3: Attestation source ≤ target ≤ head
+### FC-3: Attestation の source/target/head は slot 順に並ぶ
 
 - 出典: `store.py:277-331` (validate_attestation)
+- 関数: `Store.validateAttestation(store, att)` — attestation の整合性 (slot 順序、参照ブロックの存在等) を検証
 - 半形式: `∀ att. validate att = ok ⇒ att.source.slot ≤ att.target.slot ∧ att.target.slot ≤ att.head.slot`
 - Lean4:
 
@@ -306,11 +306,144 @@ theorem attestation_topology
     att.data.target.slot ≤ att.data.head.slot := by sorry
 ```
 
-### T2-C. Storage 整合性
+### FC-4: Fork choice tree は acyclic である
 
-#### T2-C.1: Block の親存在 (genesis 以外)
+- 関数: `Store.isProperAncestor(store, a, b)` — a が b の真の祖先 (≠ b 自身) かを判定。acyclicity は「自分が自分の真の祖先になる」を否定することで表現する
+- 半形式: `∀ st. parentRoot 関係は store.blocks 上の DAG (循環なし)`
+- Lean4:
+
+```lean
+theorem fork_choice_acyclic (st : Store) (hwf : Store.WellFormed st) :
+    ∀ b ∈ st.blocks.values, ¬ Store.isProperAncestor st b.root b.root := by sorry
+```
+
+### FC-5: Fixed-point block building loop は有限ステップで停止する
+
+- 出典: `store.py:1236-1344` (produce_block_with_signatures)
+- 関数: `produce_block_with_signatures` — 新ブロック生成の fixed-point ループ (justified slot が更新されなくなるまで反復)
+- 半形式: 各反復で `latest_justified.slot` が単調増加または不動 ⇒ 有限ステップで停止
+- Lean4: WellFoundedRecursion で表現。難度高。
+
+## Validator
+
+**Validator** は ETH をステークしてコンセンサスに参加する主体。各スロットで割り当てられた **duty** を実行する: (1) `proposer` に選ばれたら新ブロックを提案、(2) `attester` として現在の head に投票。Validator service はローカルで自分の鍵 (proposal key と attestation key の dual-key 構成) と署名済み履歴を管理する。
+
+ここでの命題は **duty の正当性と slashing 防止** を保証する: proposer の選出は `slot mod n` の round-robin で各スロットにちょうど 1 人、proposal key と attestation key は別物 (鍵漏洩時の影響を局所化)、同じ slot で 2 回 attest しない (二重投票 = slashable)、XMSS の状態付き署名鍵は使用済み index を逆戻りしない (鍵再利用は秘密鍵漏洩につながる)、など。これらは validator が罰金を食らわず、かつネットワークが安全に進むための条件。実装は `LeanSpec/Validator/*`。
+
+### VAL-1: proposer は round-robin で選出される
+
+- 出典: `process_block_header` (`state.py:182-323`)
+- 関数: `proposer_index(slot, n)` — slot と active validator 数 n から、その slot の proposer index を返す (round-robin)
+- 半形式: `∀ slot n. n > 0 ⇒ proposer_index slot n = slot mod n`
+- Lean4:
+
+```lean
+theorem proposer_index_round_robin (slot : Slot) (n : Nat) (h : 0 < n) :
+    ValidatorIndex.proposerFor slot n = ValidatorIndex.mk (slot.toNat % n) := by sorry
+```
+
+### VAL-2: proposal key と attestation key は別物である
+
+- 出典: `src/lean_spec/subspecs/validator/service.py:15-29, 376-452`
+- 関数:
+  - `proposalKey(vid)`: validator vid の block proposal 用署名鍵
+  - `attestationKey(vid)`: validator vid の attestation 用署名鍵 (proposalKey とは別物)
+- 半形式: `∀ vid. proposalKey(vid) ≠ attestationKey(vid)`
+- Lean4:
+
+```lean
+theorem dual_key_distinct (vid : ValidatorIndex) (reg : KeyRegistry) :
+    reg.proposalKey vid ≠ reg.attestationKey vid := by sorry
+```
+
+### VAL-3: 各 slot の提案者はちょうど 1 人である
+
+- 出典: `validator/service.py:223-308`
+- 関数: `isProposer(vid, slot, n)` — validator vid が slot の proposer かを判定 (`vid = slot mod n` と等価)
+- 半形式: `∀ slot n. (n > 0 ⇒ ∃! vid < n. isProposer vid slot n)`
+- Lean4:
+
+```lean
+theorem unique_proposer (slot : Slot) (n : Nat) (h : 0 < n) :
+    ∃! vid : Fin n, ValidatorIndex.isProposerFor vid slot := by sorry
+```
+
+### VAL-4: 同一 slot で二重投票はできない
+
+- 出典: `validator/service.py:187-209`
+- 関数:
+  - `attested(vid, slot)`: validator vid がローカル履歴で slot に対して既に attest 済みかを判定
+  - `produceAttestation(svc, vid, slot)`: validator vid が slot 用の新規 attestation を生成 (二重投票になる場合は失敗)
+- 半形式: `∀ vid slot. attested vid slot ⇒ ¬ produceAttestation vid slot` (ローカル状態で gate)
+- Lean4:
+
+```lean
+theorem no_double_vote
+    (svc svc' : ValidatorService) (vid : ValidatorIndex) (slot : Slot)
+    (hin : slot ∈ svc.attestedSlots vid)
+    (h : ValidatorService.produceAttestation svc vid slot = .ok svc') :
+    False := by sorry
+```
+
+### VAL-5: XMSS 準備状態は単調増加する
+
+- 出典: `validator/service.py:454-496`
+- 関数:
+  - `XMSS.advancePreparation(sk)`: XMSS 秘密鍵 sk の prepared 状態 (使用可能な one-time key 範囲) を 1 ステップ進める
+  - `sk.preparedEnd`: sk が現在準備済みの最後の one-time key index
+- 半形式: `∀ sk. let sk' = advance_preparation sk in sk'.preparedEnd > sk.preparedEnd`
+- Lean4:
+
+```lean
+theorem xmss_advance_monotone (sk : XMSSSecretKey) :
+    sk.preparedEnd < (XMSS.advancePreparation sk).preparedEnd := by sorry
+```
+
+## Networking
+
+**Networking** はピア間の通信プロトコル。2 系統ある: (1) **req/resp** — `BlocksByRange`, `BlocksByRoot`, `Status` 等の同期型 1 対 1 RPC、(2) **gossipsub** — `beacon_block`, `beacon_attestation` 等の publish/subscribe メッセージ伝搬。両方とも libp2p の上に乗る。
+
+ここでの命題は **DoS 耐性のための境界値** を保証する: `BlocksByRange` の応答は要求された `count` と `MAX_REQUEST_BLOCKS` のうち小さい方を超えない、デコード可能なペイロードは `MAX_PAYLOAD_SIZE` 以下、など。これらが崩れると、悪意あるピアが巨大ペイロードや無限長応答を送り込んで node のメモリ/CPU を枯渇させられる。実装は `LeanSpec/Networking/*`。
+
+### NET-1: BlocksByRange 応答長は上限を超えない
+
+- 出典: `src/lean_spec/subspecs/networking/reqresp/handler.py:283-287`
+- 関数: `Handler.handle(req)` — `BlocksByRange` リクエストを受信し block 列で応答する req/resp ハンドラ
+- 半形式: `∀ req resp. handle req = ok resp ⇒ resp.length ≤ min(req.count, MAX_REQUEST_BLOCKS)`
+- Lean4:
+
+```lean
+theorem blocks_by_range_bounded
+    (req : BlocksByRangeRequest) (resp : List Block)
+    (h : Handler.handle req = .ok resp) :
+    resp.length ≤ min req.count MAX_REQUEST_BLOCKS := by sorry
+```
+
+### NET-2: デコード可能なペイロードサイズは上限以下である
+
+- 出典: `reqresp/codec.py:121-122`
+- 関数: `Codec.decode(payload)` — req/resp プロトコル上のメッセージペイロードを SSZ デコードして Message 型に変換
+- 半形式: `∀ payload. decode payload = ok _ ⇒ payload.length ≤ MAX_PAYLOAD_SIZE`
+- Lean4:
+
+```lean
+theorem payload_size_bound (payload : ByteArray) (msg : Message)
+    (h : Codec.decode payload = .ok msg) :
+    payload.size ≤ MAX_PAYLOAD_SIZE := by sorry
+```
+
+## Storage
+
+**Storage** は永続化レイヤー — ブロック、state、checkpoint をディスクに保存し、再起動後の復元やプルーニングを担当する。実装上は KV ストア (LevelDB / RocksDB 系) を抽象化した `Database` インタフェース上で、`block_root → Block`、`state_root → BeaconState` のマッピングを管理する。
+
+ここでの命題は **チェーン構造の整合性と書き込みの原子性** を保証する: store に存在するブロックは genesis を除き必ず親もまた store に存在する (孤立ブロック禁止、fork choice の前提)、`batch_write` は全件成功するか全件失敗するかの 2 状態のみ (中途半端な永続化で state と block の参照が食い違わない)、など。これらが崩れると、再起動後に Store が壊れ、fork choice が回らなくなる。実装は `LeanSpec/Storage/*`。
+
+### STOR-1: genesis 以外の Block は親が store に存在する
 
 - 出典: `src/lean_spec/subspecs/storage/database.py:22-36`
+- 関数:
+  - `b.parent_root`: block b の親 block root (genesis 以外は store 内に親が存在する必要がある)
+  - `store.blocks`: store が保持する `block_root → Block` のマップ
 - 半形式: `∀ b ∈ store.blocks. b.parent_root = ZERO_HASH ∨ b.parent_root ∈ store.blocks`
 - Lean4:
 
@@ -322,9 +455,10 @@ theorem parent_exists_or_genesis
     st.blocks.contains b.parentRoot := by sorry
 ```
 
-#### T2-C.2: バッチ書き込みの原子性
+### STOR-2: バッチ書き込みは原子的である
 
 - 出典: `database.py:288-296`
+- 関数: `Database.batchWrite(db, writes)` — 複数の書き込みを 1 トランザクションで適用 (全成功 or 全失敗の atomic 保証)
 - 半形式: `∀ writes. batch_write writes = ok ⇒ all_persisted writes ∨ none_persisted writes`
 - Lean4 (高水準モデル化):
 
@@ -335,11 +469,16 @@ theorem batch_atomic
     (∀ w ∈ ws, db'.contains w) ∨ db' = db := by sorry
 ```
 
-### T2-D. Sync 状態機械
+## Sync
 
-#### T2-D.1: 状態遷移の妥当性
+**Sync** は node がネットワークの最新 head に追いつくまでのプロセスを管理する有限状態機械 (FSM)。3 状態: `IDLE` (起動直後・停止中、ブロックを処理しない)、`SYNCING` (head から大きく遅れており req/resp で range 取得中)、`SYNCED` (head に追いつき gossip でリアルタイム受信中)。許可される遷移は 4 種類のみ: `IDLE → SYNCING`、`SYNCING → SYNCED`、`SYNCED → SYNCING` (再び遅れた)、任意の状態 → `IDLE` (shutdown / fatal)。
+
+ここでの命題は **FSM の閉性と gossip の gating** を保証する: 実装の `transition` 関数は許可された 4 遷移以外を生成しない、`acceptsGossip ⇔ st ∈ {SYNCING, SYNCED}` (IDLE 中に gossip を受け付けると古い/壊れた payload を再 forward してネットワークを汚染する)、など。実装は `LeanSpec/Sync/*`。
+
+### SYNC-1: sync FSM の遷移は許可された 4 種類のみである
 
 - 出典: `src/lean_spec/subspecs/sync/service.py:25-34, 767-786`
+- 関数: `SyncService.transition(state)` — sync FSM の現状態から次状態を計算 (許可された 4 遷移のいずれか、または `none`)
 - 半形式: `validTransitions = {(IDLE, SYNCING), (SYNCING, SYNCED), (SYNCED, SYNCING), (_, IDLE)}`
 - Lean4:
 
@@ -356,9 +495,10 @@ theorem transition_sound (s s' : SyncState)
     s.canTransitionTo s' := by sorry
 ```
 
-#### T2-D.2: Gossip 受付条件
+### SYNC-2: Gossip は SYNCING/SYNCED 状態でのみ受け付けられる
 
 - 出典: `sync/service.py:477-487`
+- 関数: `SyncService.acceptsGossip(state)` — 現状態で gossipsub メッセージを受け付けるかを判定 (`SYNCING` または `SYNCED` のときのみ true)
 - 半形式: `∀ st. acceptsGossip st ⇔ st ∈ {syncing, synced}`
 - Lean4:
 
@@ -367,182 +507,3 @@ theorem accepts_gossip_iff (st : SyncState) :
     SyncService.acceptsGossip st ↔ st = .syncing ∨ st = .synced := by sorry
 ```
 
-### T2-E. Validator slashing 防止
-
-#### T2-E.1: 二重投票防止 (1 スロットあたり 1 attestation)
-
-- 出典: `validator/service.py:187-209`
-- 半形式: `∀ vid slot. attested vid slot ⇒ ¬ produceAttestation vid slot` (ローカル状態で gate)
-- Lean4:
-
-```lean
-theorem no_double_vote
-    (svc svc' : ValidatorService) (vid : ValidatorIndex) (slot : Slot)
-    (hin : slot ∈ svc.attestedSlots vid)
-    (h : ValidatorService.produceAttestation svc vid slot = .ok svc') :
-    False := by sorry
-```
-
-#### T2-E.2: XMSS 準備状態の単調性
-
-- 出典: `validator/service.py:454-496`
-- 半形式: `∀ sk. let sk' = advance_preparation sk in sk'.preparedEnd > sk.preparedEnd`
-- Lean4:
-
-```lean
-theorem xmss_advance_monotone (sk : XMSSSecretKey) :
-    sk.preparedEnd < (XMSS.advancePreparation sk).preparedEnd := by sorry
-```
-
-## Tier 3: 抽象的・安全性 critical (高難度)
-
-### T3-A. Fork choice の global property
-
-#### T3-A.1: Fork choice tree は acyclic
-
-- 半形式: `∀ st. parentRoot 関係は store.blocks 上の DAG (循環なし)`
-- Lean4:
-
-```lean
-theorem fork_choice_acyclic (st : Store) (hwf : Store.WellFormed st) :
-    ∀ b ∈ st.blocks.values, ¬ Store.isProperAncestor st b.root b.root := by sorry
-```
-
-#### T3-A.2: Finalization の irreversibility
-
-- 半形式: `∀ s s'. s' = transition s _ ⇒ ¬(s'.latest_finalized.slot < s.latest_finalized.slot)`
-- Lean4:
-
-```lean
-theorem finalization_irreversible
-    (s s' : State) (b : Block)
-    (h : State.transition s b = .ok s') :
-    s.latestFinalized.slot ≤ s'.latestFinalized.slot := by sorry
-```
-
-#### T3-A.3: Fixed-point block building loop の停止性
-
-- 出典: `store.py:1236-1344` (produce_block_with_signatures)
-- 半形式: 各反復で `latest_justified.slot` が単調増加または不動 ⇒ 有限ステップで停止
-- Lean4: WellFoundedRecursion で表現。難度高。
-
-### T3-B. State transition の決定性
-
-#### T3-B.1: stateTransition は純関数
-
-- 半形式: `∀ s b. transition s b = transition s b` (副作用なし)
-- Lean4: 関数定義から自動的に決定的。`@[simp]` 補題として書く。
-
-#### T3-B.2: hash_tree_root の決定性
-
-- 出典: `src/lean_spec/subspecs/ssz/hash.py:34-160`
-- 半形式: 純関数性。collision resistance は `axiom`。
-- Lean4:
-
-```lean
-axiom HashTreeRoot.collisionResistance :
-    ∀ x y, hashTreeRoot x = hashTreeRoot y → x = y
--- 注: 厳密な定理ではなく、暗号学的仮定として使う
-```
-
-### T3-C. KoalaBear 体公理
-
-#### T3-C.1: Fp は可換環
-
-- 出典: `src/lean_spec/subspecs/koalabear/field.py`
-- 半形式: 加法・乗法の結合・可換・分配・単位元・逆元
-- Lean4 (Mathlib `CommRing` instance):
-
-```lean
-instance : CommRing Fp := { /- 各 op の証明を書く -/ }
-```
-
-#### T3-C.2: Fermat の小定理から乗法逆元
-
-- 半形式: `∀ a ≠ 0. a^(P-2) * a = 1 (mod P)`
-- 注: Mathlib の `ZMod.pow_card_sub_two_eq_inv` を活用可能。
-
-### T3-D. XMSS sign-verify round-trip
-
-#### T3-D.1: 正しく key_gen された鍵では sign → verify が成功
-
-- 出典: `src/lean_spec/subspecs/xmss/interface.py:224-400`
-- 半形式: `∀ pk sk. (pk, sk) = key_gen ⇒ verify pk slot msg (sign sk slot msg) = true` (slot ∈ prepared)
-- Lean4:
-
-```lean
-theorem xmss_sign_verify
-    (pk : XMSSPublicKey) (sk : XMSSSecretKey)
-    (slot : Slot) (msg : Bytes32)
-    (hkg : XMSS.keyGenSpec pk sk)
-    (hslot : slot ∈ sk.preparedRange) :
-    XMSS.verify pk slot msg (XMSS.sign sk slot msg) = true := by sorry
-```
-
-## 抽象度ロードマップ (具体 → 抽象)
-
-| Phase | 焦点 | 命題例 |
-|---|---|---|
-| 1 | 純粋計算 (Tier 1) | round-trip, 範囲制約, 境界値 |
-| 2 | 関数の事前/事後条件 (Tier 1〜2) | process_slots, validate_attestation |
-| 3 | 状態遷移の単調性 (Tier 2) | checkpoint slot 単調, justified ≥ finalized |
-| 4 | システム不変量 (Tier 2〜3) | sync FSM, parent existence |
-| 5 | グローバル安全性 (Tier 3) | acyclicity, finalization irreversibility |
-| 6 | 暗号学的合成 (Tier 3) | XMSS round-trip, hash 仮定 |
-
-各フェーズで命題と Lean4 stub を確定し、次フェーズに進む。
-
-## 想定する Lean4 ファイル構成
-
-実装フェーズで作成する想定の Lean4 ファイル群:
-
-```text
-proofs/lean4/
-  LeanSpec/
-    Prelude.lean                        -- 共通型 (Slot, Checkpoint, ByteArray32 etc)
-    SSZ/
-      Boolean.lean                      -- T1-A.1
-      Uint.lean                         -- T1-A.2, T1-A.3
-      Bytes.lean                        -- T1-A.4
-      Vector.lean                       -- T1-A.5
-      Utils.lean                        -- T1-A.6
-    Forks/Lstar/
-      Slot.lean                         -- T1-B.2
-      Checkpoint.lean                   -- T1-B.1
-      ProposerIndex.lean                -- T1-B.3, T1-C.2
-      State.lean                        -- T2-A.1〜4
-      Store.lean                        -- T2-B.1〜3, T3-A.1〜3
-    Validator/
-      DualKey.lean                      -- T1-C.1
-      Slashing.lean                     -- T2-E.1〜2
-    Networking/
-      ReqResp.lean                      -- T1-D.1〜2
-    Sync/
-      FSM.lean                          -- T2-D.1〜2
-    Storage/
-      Database.lean                     -- T2-C.1〜2
-  lakefile.lean                         -- Lake (Lean4 build)
-  lean-toolchain                        -- Lean4 version
-```
-
-実装は各 stub を `sorry` で開始。Tier 1 から順に `sorry` を解消する。
-
-## 参照する既存コード
-
-Lean4 化する際、Python 側で reference になる関数 (再実装ではなく仕様の対応関係をマッピング):
-
-- `src/lean_spec/types/uint.py:84-126` — `to_bytes(8, 'little')` の Lean4 対応
-- `src/lean_spec/types/boolean.py:87-103` — true/false → 0x01/0x00
-- `src/lean_spec/types/byte_arrays.py:59-76` — fixed-length 検査
-- `src/lean_spec/forks/lstar/containers/slot.py` — `is_justifiable_after` (3 条件 disjunction)
-- `src/lean_spec/forks/lstar/containers/state/state.py:113-180` — process_slots
-- `src/lean_spec/forks/lstar/store.py:639-762` — LMD-GHOST head selection
-- `src/lean_spec/subspecs/networking/reqresp/handler.py:283-287` — BlocksByRange bounds
-
-## Open Questions
-
-- **Mathlib 依存**: Tier 3-C (体公理) は Mathlib 必須。Mathlib を入れるか独自実装か？
-- **Python 仕様との対応**: Lean4 側の型定義は Python 側を 1:1 で写すか、抽象化して書き直すか？
-- **テスト fixtures との連携**: `tests/consensus/` の JSON fixtures を Lean4 で実行可能 spec として使うか？
-- **`axiom` 化の境界**: hash collision resistance, XMSS security はどこまで `axiom` として置くか？
-- **抽象化の段階**: 本文書は L1〜L2 中心。L3 (system-level) は次フェーズで切り出す予定。
