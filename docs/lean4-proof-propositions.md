@@ -30,8 +30,8 @@ leanSpec は Lean Ethereum コンセンサスの Python 仕様。
 
 命題の主張は **見出し (`### <ID>: ...`) のタイトル文** が述語形でそのまま述べる。各命題ブロックは以下の項目で構成される (出現順)。`出典` / `補足` は省略可、`サンプルコード` は基本的に必須。
 
-- **出典**: 命題の根拠となる leanSpec (Python) ソースのパスと行番号 (例: `src/lean_spec/forks/lstar/containers/state/state.py:113-180`)。命題が「Python 仕様のどの挙動を抜き出したものか」を追跡可能にする。
-- **補足**: `出典` が指す leanSpec 関数 (出典がない場合はサンプルコードに登場する関連関数) の役割を 1 行で説明する。命題単体では関数名から何をする関数か読み取れないため (例: `is_justifiable_after` だけ見ても何の判定か不明) に付ける。`encode`/`decode` のような自明な関数では省略する。
+- **出典**: 命題の根拠となる leanSpec (Python) の関数名 / 型名 (例: `process_slots`、`Uint64.encode`、`Database.batch_write`)。命題が「Python 仕様のどの挙動を抜き出したものか」を追跡可能にする。1 関数に局所化できない cross-cutting な性質では主要関数 + 注釈 (例: `state_transition` (任意回適用したグローバル不変量)) で示す。
+- **補足**: `出典` が指す関数の役割を自然言語で 1 行説明する。関数名だけでは何をする関数か読み取れないため (例: `is_justifiable_after` だけ見ても何の判定か不明) に付ける。`encode`/`decode` のような自明な関数では省略する。
 - **サンプルコード**: Lean4 で書いた命題の stub。証明本体は `sorry` で保留:
 
   ```lean
@@ -64,7 +64,7 @@ leanSpec は Lean Ethereum コンセンサスの Python 仕様。
 
 ### SSZ-1: Boolean はエンコード/デコードで元に戻る
 
-- 出典: `src/lean_spec/types/boolean.py:87-103`
+- 出典: `Boolean.encode` / `Boolean.decode`
 - サンプルコード:
 
 ```lean
@@ -74,7 +74,7 @@ theorem boolean_roundtrip (b : Boolean) :
 
 ### SSZ-2: Uint64 の値は [0, 2^64) に収まる
 
-- 出典: `src/lean_spec/types/uint.py:22-38`
+- 出典: `Uint64` (型定義)
 - サンプルコード:
 
 ```lean
@@ -84,7 +84,7 @@ theorem uint64_range (v : Uint64) :
 
 ### SSZ-3: Uint64 は 8 バイト LE エンコード/デコードで元に戻る
 
-- 出典: `uint.py:84-126`
+- 出典: `Uint64.encode` / `Uint64.decode`
 - サンプルコード:
 
 ```lean
@@ -97,7 +97,7 @@ theorem uint64_encode_length (v : Uint64) :
 
 ### SSZ-4: Bytes32 は常に 32 バイトである
 
-- 出典: `src/lean_spec/types/byte_arrays.py:59-76`
+- 出典: `Bytes32` (型定義)
 - サンプルコード:
 
 ```lean
@@ -106,7 +106,7 @@ theorem bytes32_length (bs : Bytes32) : bs.size = 32 := by sorry
 
 ### SSZ-5: SSZVector の長さは型パラメータ n に等しい
 
-- 出典: `src/lean_spec/types/collections.py:137-158`
+- 出典: `SSZVector` (型定義)
 - サンプルコード:
 
 ```lean
@@ -116,8 +116,8 @@ theorem sszvector_length {T : Type} {n : Nat} (v : SSZVector T n) :
 
 ### SSZ-6: 2 の冪への切り上げは入力以上の最小値になる
 
-- 出典: `src/lean_spec/subspecs/ssz/utils.py:10-14`
-- 補足: `ceilPow2(x)` — `x` 以上の最小の 2 の冪を返す (Merkle 木のリーフ数を 2 冪に揃えるパディング計算で使う)
+- 出典: `get_power_of_two_ceil`
+- 補足: `x` 以上の最小の 2 の冪を返す (Merkle 木のリーフ数を 2 冪に揃えるパディング計算で使う)
 - サンプルコード:
 
 ```lean
@@ -128,7 +128,7 @@ theorem ceil_pow2_minimal (x : Nat) (h : 0 < x) :
 
 ### SSZ-7: Merkle root 計算は決定的である
 
-- 出典: `src/lean_spec/subspecs/ssz/hash.py:34-160`
+- 出典: `hash_tree_root`
 - サンプルコード:
 
 ```lean
@@ -145,7 +145,7 @@ axiom HashTreeRoot.collisionResistance :
 
 ### CONT-1: Checkpoint の順序は slot で決まる
 
-- 出典: `src/lean_spec/forks/lstar/containers/checkpoint.py`
+- 出典: `Checkpoint` (比較演算)
 - サンプルコード:
 
 ```lean
@@ -155,8 +155,8 @@ theorem checkpoint_lt_iff_slot_lt (c1 c2 : Checkpoint) :
 
 ### CONT-2: justifiable は 3 種類の slot 距離のいずれかで成立する
 
-- 出典: `src/lean_spec/forks/lstar/containers/slot.py`
-- 補足: `is_justifiable_after(finalized, target)` — finalized checkpoint slot から見て target slot が justifiable な距離にあるかを判定 (LMD-CASPER の justification 候補性チェック)
+- 出典: `is_justifiable_after`
+- 補足: finalized checkpoint slot から見て target slot が justifiable な距離にあるかを判定 (LMD-CASPER の justification 候補性チェック)
 - サンプルコード:
 
 ```lean
@@ -175,8 +175,8 @@ theorem justifiable_iff
 
 ### ST-1: 空 slot 進行で state.slot は target になる
 
-- 出典: `src/lean_spec/forks/lstar/containers/state/state.py:113-180`
-- 補足: `process_slots(state, target)` — state を target slot まで空 (ブロックなし) で繰り返し前進させる
+- 出典: `process_slots`
+- 補足: state を target slot まで空 (ブロックなし) で繰り返し前進させる
 - サンプルコード:
 
 ```lean
@@ -187,8 +187,8 @@ theorem process_slots_advances (s : State) (target : Slot)
 
 ### ST-2: ブロックヘッダ適用で最新ヘッダ slot はブロック slot と一致する
 
-- 出典: `state.py:182-323`
-- 補足: `process_block_header(state, block)` — block のヘッダ部分を state に適用し `latest_block_header` を更新
+- 出典: `process_block_header`
+- 補足: block のヘッダ部分を state に適用し `latest_block_header` を更新
 - サンプルコード:
 
 ```lean
@@ -200,8 +200,8 @@ theorem process_block_header_slot
 
 ### ST-3: Checkpoint slot は遷移をまたいで単調非減少である
 
-- 出典: `state.py` (process 全般)
-- 補足: `stateTransition(state, block)` — `process_slots` と `process_block` の合成。1 ブロック分の状態遷移
+- 出典: `state_transition` (process 全般)
+- 補足: `process_slots` と `process_block` の合成。1 ブロック分の状態遷移
 - サンプルコード:
 
 ```lean
@@ -214,6 +214,7 @@ theorem checkpoint_monotone
 
 ### ST-4: justified slot は常に finalized slot 以上である
 
+- 出典: `process_justification_and_finalization` (および関連 process_*、複数関数で維持される reachable-state 不変量)
 - サンプルコード:
 
 ```lean
@@ -223,12 +224,14 @@ theorem justified_ge_finalized (s : State) (hreach : Reachable s) :
 
 ### ST-5: 状態遷移関数は純関数である
 
-- 補足: `transition(state, block)` — ST-3 の `stateTransition` の別名。同一引数なら必ず同一結果
+- 出典: `state_transition` (シグネチャ全体に対するメタ性質)
+- 補足: ST-3 と同じ状態遷移関数。同一引数なら必ず同一結果
 - サンプルコード: `@[simp]` 補題として書く。
 
 ### ST-6: Finalization は不可逆である
 
-- 補足: `transition(state, block)` — ST-3 と同義の状態遷移関数
+- 出典: `state_transition` (任意回適用したグローバル不変量)
+- 補足: ST-3 と同義の状態遷移関数
 - サンプルコード:
 
 ```lean
@@ -246,8 +249,8 @@ theorem finalization_irreversible
 
 ### FC-1: head 選択は決定的である (純関数)
 
-- 出典: `src/lean_spec/forks/lstar/store.py:639-762`
-- 補足: `Store.computeHead(store)` — Store から LMD-GHOST で canonical head の root を計算
+- 出典: `compute_head`
+- 補足: Store から LMD-GHOST で canonical head の root を計算
 - サンプルコード:
 
 ```lean
@@ -258,9 +261,8 @@ theorem compute_head_deterministic (st : Store) :
 
 ### FC-2: head は最新の justified checkpoint の子孫である
 
-- 補足:
-  - `Store.computeHead(store)`: Store から LMD-GHOST で canonical head の root を計算
-  - `isAncestorOrEqual(store, a, b)`: a が store 上で b の祖先または同一かを判定
+- 出典: `compute_head` (派生性質、FC-1 と同関数)
+- 補足: head が justified の子孫であることを `isAncestorOrEqual` (a が b の祖先または同一かを判定する補助関数) で確認する
 - サンプルコード:
 
 ```lean
@@ -271,8 +273,8 @@ theorem head_descends_from_justified (st : Store) (h : Bytes32)
 
 ### FC-3: Attestation の source/target/head は slot 順に並ぶ
 
-- 出典: `store.py:277-331` (validate_attestation)
-- 補足: `Store.validateAttestation(store, att)` — attestation の整合性 (slot 順序、参照ブロックの存在等) を検証
+- 出典: `validate_attestation`
+- 補足: attestation の整合性 (slot 順序、参照ブロックの存在等) を検証
 - サンプルコード:
 
 ```lean
@@ -285,7 +287,8 @@ theorem attestation_topology
 
 ### FC-4: Fork choice tree は acyclic である
 
-- 補足: `Store.isProperAncestor(store, a, b)` — a が b の真の祖先 (≠ b 自身) かを判定。acyclicity は「自分が自分の真の祖先になる」を否定することで表現する
+- 出典: `Database.add_block` / `parent_root` 規約 (block 挿入時から生じる構造的不変量)
+- 補足: 「a が b の真の祖先 (≠ b 自身) か」を判定する `isProperAncestor` を使い、「自分が自分の真の祖先になる」ことを否定して acyclicity を表現する
 - サンプルコード:
 
 ```lean
@@ -295,8 +298,8 @@ theorem fork_choice_acyclic (st : Store) (hwf : Store.WellFormed st) :
 
 ### FC-5: Fixed-point block building loop は有限ステップで停止する
 
-- 出典: `store.py:1236-1344` (produce_block_with_signatures)
-- 補足: `produce_block_with_signatures` — 新ブロック生成の fixed-point ループ (justified slot が更新されなくなるまで反復)
+- 出典: `produce_block_with_signatures`
+- 補足: 新ブロック生成の fixed-point ループ (justified slot が更新されなくなるまで反復)
 - サンプルコード: WellFoundedRecursion で表現。難度高。
 
 ## Validator
@@ -307,8 +310,8 @@ theorem fork_choice_acyclic (st : Store) (hwf : Store.WellFormed st) :
 
 ### VAL-1: proposer は round-robin で選出される
 
-- 出典: `process_block_header` (`state.py:182-323`)
-- 補足: `proposer_index(slot, n)` — slot と active validator 数 n から、その slot の proposer index を返す (round-robin)
+- 出典: `proposer_index` (in `process_block_header`)
+- 補足: slot と active validator 数 n から、その slot の proposer index を返す (round-robin)
 - サンプルコード:
 
 ```lean
@@ -318,10 +321,8 @@ theorem proposer_index_round_robin (slot : Slot) (n : Nat) (h : 0 < n) :
 
 ### VAL-2: proposal key と attestation key は別物である
 
-- 出典: `src/lean_spec/subspecs/validator/service.py:15-29, 376-452`
-- 補足:
-  - `proposalKey(vid)`: validator vid の block proposal 用署名鍵
-  - `attestationKey(vid)`: validator vid の attestation 用署名鍵 (proposalKey とは別物)
+- 出典: `proposalKey` / `attestationKey` (ValidatorService)
+- 補足: validator ごとに block proposal 用と attestation 用の 2 種類の署名鍵を別々に管理する
 - サンプルコード:
 
 ```lean
@@ -331,8 +332,8 @@ theorem dual_key_distinct (vid : ValidatorIndex) (reg : KeyRegistry) :
 
 ### VAL-3: 各 slot の提案者はちょうど 1 人である
 
-- 出典: `validator/service.py:223-308`
-- 補足: `isProposer(vid, slot, n)` — validator vid が slot の proposer かを判定 (`vid = slot mod n` と等価)
+- 出典: `is_proposer` / `proposer_index` (ValidatorService)
+- 補足: validator vid が slot の proposer かを判定 (`vid = slot mod n` と等価)
 - サンプルコード:
 
 ```lean
@@ -342,10 +343,8 @@ theorem unique_proposer (slot : Slot) (n : Nat) (h : 0 < n) :
 
 ### VAL-4: 同一 slot で二重投票はできない
 
-- 出典: `validator/service.py:187-209`
-- 補足:
-  - `attested(vid, slot)`: validator vid がローカル履歴で slot に対して既に attest 済みかを判定
-  - `produceAttestation(svc, vid, slot)`: validator vid が slot 用の新規 attestation を生成 (二重投票になる場合は失敗)
+- 出典: `ValidatorService.produce_attestation`
+- 補足: ローカル履歴で「該当 slot に既に attest 済みか」を判定し、未投票なら新規 attestation を生成 (二重投票になる場合は失敗)
 - サンプルコード:
 
 ```lean
@@ -358,10 +357,8 @@ theorem no_double_vote
 
 ### VAL-5: XMSS 準備状態は単調増加する
 
-- 出典: `validator/service.py:454-496`
-- 補足:
-  - `XMSS.advancePreparation(sk)`: XMSS 秘密鍵 sk の prepared 状態 (使用可能な one-time key 範囲) を 1 ステップ進める
-  - `sk.preparedEnd`: sk が現在準備済みの最後の one-time key index
+- 出典: `XMSS.advance_preparation` (ValidatorService から呼出)
+- 補足: XMSS 秘密鍵の prepared 状態 (使用可能な one-time key 範囲) を 1 ステップ進める。`preparedEnd` は現在準備済みの最後の index
 - サンプルコード:
 
 ```lean
@@ -377,8 +374,8 @@ theorem xmss_advance_monotone (sk : XMSSSecretKey) :
 
 ### NET-1: BlocksByRange 応答長は上限を超えない
 
-- 出典: `src/lean_spec/subspecs/networking/reqresp/handler.py:283-287`
-- 補足: `Handler.handle(req)` — `BlocksByRange` リクエストを受信し block 列で応答する req/resp ハンドラ
+- 出典: `Handler.handle` (BlocksByRange)
+- 補足: `BlocksByRange` リクエストを受信し block 列で応答する req/resp ハンドラ
 - サンプルコード:
 
 ```lean
@@ -390,8 +387,8 @@ theorem blocks_by_range_bounded
 
 ### NET-2: デコード可能なペイロードサイズは上限以下である
 
-- 出典: `reqresp/codec.py:121-122`
-- 補足: `Codec.decode(payload)` — req/resp プロトコル上のメッセージペイロードを SSZ デコードして Message 型に変換
+- 出典: `Codec.decode`
+- 補足: req/resp プロトコル上のメッセージペイロードを SSZ デコードして Message 型に変換
 - サンプルコード:
 
 ```lean
@@ -408,10 +405,8 @@ theorem payload_size_bound (payload : ByteArray) (msg : Message)
 
 ### STOR-1: genesis 以外の Block は親が store に存在する
 
-- 出典: `src/lean_spec/subspecs/storage/database.py:22-36`
-- 補足:
-  - `b.parent_root`: block b の親 block root (genesis 以外は store 内に親が存在する必要がある)
-  - `store.blocks`: store が保持する `block_root → Block` のマップ
+- 出典: `Database.add_block` (親存在前提)
+- 補足: store 上の各 block は親 block root (`parent_root`) を持ち、genesis 以外は親が `store.blocks` (`block_root → Block` マップ) に存在する必要がある
 - サンプルコード:
 
 ```lean
@@ -424,8 +419,8 @@ theorem parent_exists_or_genesis
 
 ### STOR-2: バッチ書き込みは原子的である
 
-- 出典: `database.py:288-296`
-- 補足: `Database.batchWrite(db, writes)` — 複数の書き込みを 1 トランザクションで適用 (全成功 or 全失敗の atomic 保証)
+- 出典: `Database.batch_write`
+- 補足: 複数の書き込みを 1 トランザクションで適用 (全成功 or 全失敗の atomic 保証)
 - サンプルコード (高水準モデル化):
 
 ```lean
@@ -443,8 +438,8 @@ theorem batch_atomic
 
 ### SYNC-1: sync FSM の遷移は許可された 4 種類のみである
 
-- 出典: `src/lean_spec/subspecs/sync/service.py:25-34, 767-786`
-- 補足: `SyncService.transition(state)` — sync FSM の現状態から次状態を計算 (許可された 4 遷移のいずれか、または `none`)
+- 出典: `SyncService.transition`
+- 補足: sync FSM の現状態から次状態を計算 (許可された 4 遷移のいずれか、または `none`)
 - サンプルコード:
 
 ```lean
@@ -462,8 +457,8 @@ theorem transition_sound (s s' : SyncState)
 
 ### SYNC-2: Gossip は SYNCING/SYNCED 状態でのみ受け付けられる
 
-- 出典: `sync/service.py:477-487`
-- 補足: `SyncService.acceptsGossip(state)` — 現状態で gossipsub メッセージを受け付けるかを判定 (`SYNCING` または `SYNCED` のときのみ true)
+- 出典: `SyncService.accepts_gossip`
+- 補足: 現状態で gossipsub メッセージを受け付けるかを判定 (`SYNCING` または `SYNCED` のときのみ true)
 - サンプルコード:
 
 ```lean
