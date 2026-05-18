@@ -1,0 +1,7 @@
+.lake/
+build/
+lake-manifest.json
+*.olean
+*.ilean
+*.hash
+.DS_Store
