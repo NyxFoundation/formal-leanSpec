@@ -1,0 +1,26 @@
+name = "leanSpec"
+defaultTargets = ["LeanSpec"]
+
+[[lean_lib]]
+name = "LeanSpec"
+
+[[lean_lib]]
+name = "Tests"
+
+[[lean_lib]]
+name = "Audits"
+
+[[lean_exe]]
+name = "Test"
+root = "Tests.Main"
+supportInterpreter = true
+
+[[lean_exe]]
+name = "FixtureCheck"
+root = "Tests.FixtureCheck"
+supportInterpreter = true
+
+[[lean_exe]]
+name = "AxiomAudit"
+root = "Audits.AxiomAudit"
+supportInterpreter = true
