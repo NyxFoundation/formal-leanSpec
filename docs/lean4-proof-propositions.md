@@ -68,7 +68,7 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 
 | Domain | Proved | Open | Axiom | Total |
 |---|---:|---:|---:|---:|
-| SSZ | 3 | 3 | 1 | 7 |
+| SSZ | 4 | 2 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
 | ST | 0 | 6 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
@@ -76,7 +76,7 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **3** | **27** | **1** | **31** |
+| **Total** | **4** | **26** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -104,16 +104,19 @@ The propositions here guarantee the **mathematical soundness of the encoder**: r
         v.toNat < 2 ^ 64 := by sorry
     ```
 
-- [ ] **SSZ-3: A Uint64 is recovered by 8-byte LE encode/decode**
+- [x] **SSZ-3: A Uint64 is recovered by 8-byte LE encode/decode**
   - Source: `Uint64.encode` / `Uint64.decode`
+  - Proved at: `LeanSpec/SSZ/Uint64.lean` (`Uint64.decode_encode`, `Uint64.encode_size`)
   - Sample code:
 
     ```lean
     theorem uint64_roundtrip (v : Uint64) :
         Uint64.decode (Uint64.encode v) = some v := by sorry
+    -- ✅ proved in LeanSpec/SSZ/Uint64.lean as `Uint64.decode_encode`
 
     theorem uint64_encode_length (v : Uint64) :
-        (Uint64.encode v).length = 8 := by sorry
+        (Uint64.encode v).size = 8 := by sorry
+    -- ✅ proved in LeanSpec/SSZ/Uint64.lean as `Uint64.encode_size`
     ```
 
 - [x] **SSZ-4: Bytes32 is always 32 bytes**
