@@ -1,6 +1,6 @@
 ---
 title: leanSpec → Lean4 Theorem Proving Proposition Catalog
-last_updated: 2026-05-04
+last_updated: 2026-05-19
 tags:
   - lean4
   - formal-verification
@@ -101,7 +101,8 @@ theorem uint64_encode_length (v : Uint64) :
 - Sample code:
 
 ```lean
-theorem bytes32_length (bs : Bytes32) : bs.size = 32 := by sorry
+theorem bytes32_length (bs : Bytes32) : bs.size = 32 := bs.property
+-- ✅ proved in `LeanSpec/SSZ/Bytes32.lean` as `Bytes32.size_eq_32`.
 ```
 
 ### SSZ-5: SSZVector length equals the type parameter n
