@@ -57,39 +57,45 @@ theorem encode_size (v : Uint64) : (encode v).size = 8 := by
   rw [List.size_toArray, encodeNat_length]
 
 /--
-Base-256 step lemma: `n mod (256·m)` splits into the bottom byte and the next
-`m` digits of `n / 256`. The base-256 positional reconstruction is built on top
-of this single step.
+Positional base-`b` step lemma: peel off the lowest base-`b` digit of `n`,
+modulo the next `m` digits. Holds without positivity constraints on `b` or `m`
+(both degenerate cases reduce to `n = n` via the `Nat.div_zero` / `Nat.mod_zero`
+conventions).
 -/
-private theorem mod_step (n m : Nat) :
-    n % (256 * m) = n % 256 + 256 * ((n / 256) % m) := by
+private theorem mod_step (b n m : Nat) :
+    n % (b * m) = n % b + b * ((n / b) % m) := by
+  rcases Nat.eq_zero_or_pos b with hb | hb
+  · subst hb; simp
   rcases Nat.eq_zero_or_pos m with hm | hm
-  · subst hm; simp; omega
-  have hr_lt : n % 256 < 256 := Nat.mod_lt n (by decide)
-  have hqm : (n / 256) % m < m := Nat.mod_lt _ hm
-  have hr_lt_M : n % 256 < 256 * m := by
-    have : 256 ≤ 256 * m := Nat.le_mul_of_pos_right 256 hm
+  · subst hm
+    simp only [Nat.mul_zero, Nat.mod_zero]
+    rw [Nat.add_comm]
+    exact (Nat.div_add_mod n b).symm
+  have hr_lt : n % b < b := Nat.mod_lt n hb
+  have hqm : (n / b) % m < m := Nat.mod_lt _ hm
+  have hr_lt_M : n % b < b * m := by
+    have : b ≤ b * m := Nat.le_mul_of_pos_right b hm
     omega
-  have hbound : 256 * ((n / 256) % m) + n % 256 < 256 * m := by
-    have h_step : 256 * ((n / 256) % m) + 256 ≤ 256 * m := by
-      calc 256 * ((n / 256) % m) + 256
-          = 256 * ((n / 256) % m + 1) := by rw [Nat.mul_add, Nat.mul_one]
-        _ ≤ 256 * m := Nat.mul_le_mul_left 256 hqm
+  have hbound : b * ((n / b) % m) + n % b < b * m := by
+    have h_step : b * ((n / b) % m) + b ≤ b * m := by
+      calc b * ((n / b) % m) + b
+          = b * ((n / b) % m + 1) := by rw [Nat.mul_add, Nat.mul_one]
+        _ ≤ b * m := Nat.mul_le_mul_left b hqm
     omega
-  have h_lhs : n % (256 * m) = (256 * (n / 256) + n % 256) % (256 * m) := by
+  have h_lhs : n % (b * m) = (b * (n / b) + n % b) % (b * m) := by
     conv =>
       lhs
-      rw [← Nat.div_add_mod n 256]
+      rw [← Nat.div_add_mod n b]
   rw [h_lhs]
-  calc (256 * (n / 256) + n % 256) % (256 * m)
-      = ((256 * (n / 256)) % (256 * m) + (n % 256) % (256 * m)) % (256 * m) :=
+  calc (b * (n / b) + n % b) % (b * m)
+      = ((b * (n / b)) % (b * m) + (n % b) % (b * m)) % (b * m) :=
           Nat.add_mod _ _ _
-    _ = (256 * ((n / 256) % m) + (n % 256) % (256 * m)) % (256 * m) := by
+    _ = (b * ((n / b) % m) + (n % b) % (b * m)) % (b * m) := by
           rw [Nat.mul_mod_mul_left]
-    _ = (256 * ((n / 256) % m) + n % 256) % (256 * m) := by
+    _ = (b * ((n / b) % m) + n % b) % (b * m) := by
           rw [Nat.mod_eq_of_lt hr_lt_M]
-    _ = 256 * ((n / 256) % m) + n % 256 := Nat.mod_eq_of_lt hbound
-    _ = n % 256 + 256 * ((n / 256) % m) := Nat.add_comm _ _
+    _ = b * ((n / b) % m) + n % b := Nat.mod_eq_of_lt hbound
+    _ = n % b + b * ((n / b) % m) := Nat.add_comm _ _
 
 private theorem decodeNat_encodeNat (n k : Nat) :
     decodeNat (encodeNat n k) = n % 256 ^ k := by
