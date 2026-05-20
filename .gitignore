@@ -1,6 +1,5 @@
 .lake/
 build/
-lake-manifest.json
 *.olean
 *.ilean
 *.hash
