@@ -1,6 +1,6 @@
 ---
 title: leanSpec → Lean4 Theorem Proving Proposition Catalog
-last_updated: 2026-05-19
+last_updated: 2026-06-02
 tags:
   - lean4
   - formal-verification
@@ -68,7 +68,7 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 
 | Domain | Proved | Open | Axiom | Total |
 |---|---:|---:|---:|---:|
-| SSZ | 4 | 2 | 1 | 7 |
+| SSZ | 5 | 1 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
 | ST | 0 | 6 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
@@ -76,7 +76,7 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **4** | **26** | **1** | **31** |
+| **Total** | **5** | **25** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -128,13 +128,15 @@ The propositions here guarantee the **mathematical soundness of the encoder**: r
     theorem bytes32_length (bs : Bytes32) : bs.size = 32 := bs.property
     ```
 
-- [ ] **SSZ-5: SSZVector length equals the type parameter n**
+- [x] **SSZ-5: SSZVector length equals the type parameter n**
   - Source: `SSZVector` (type definition)
-  - Sample code:
+  - Proved at: `LeanSpec/SSZ/Vector.lean` (`SSZVector.sszvector_length`)
+  - Sample code (`.length` reconciled to Lean's `Array.size`; the two coincide for `Array T`):
 
     ```lean
     theorem sszvector_length {T : Type} {n : Nat} (v : SSZVector T n) :
-        v.data.length = n := by sorry
+        v.data.size = n := v.size_eq
+    -- ✅ proved in LeanSpec/SSZ/Vector.lean as `SSZVector.sszvector_length`
     ```
 
 - [ ] **SSZ-6: Rounding up to a power of two yields the smallest such value ≥ the input**
