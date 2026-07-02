@@ -70,13 +70,13 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
-| ST | 3 | 3 | 0 | 6 |
+| ST | 5 | 1 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
 | VAL | 0 | 5 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **9** | **21** | **1** | **31** |
+| **Total** | **11** | **19** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -225,10 +225,11 @@ The propositions here guarantee that **the STF advances state as expected**: aft
     -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as `State.process_block_header_slot`
     ```
 
-- [ ] **ST-3: Checkpoint slots are monotonically non-decreasing across transitions**
-  - Source: `state_transition` (the `process_*` family in general)
+- [x] **ST-3: Checkpoint slots are monotonically non-decreasing across transitions**
+  - Source: `state_transition` (the `process_*` family in general; `src/lean_spec/spec/forks/lstar/state_transition.py`)
   - Note: Composition of `process_slots` and `process_block`. One-block state transition.
-  - Sample code:
+  - Proved at: `LeanSpec/Forks/Lstar/StateTransition.lean` (`State.checkpoint_monotone`)
+  - Sample code (the proved statement adds an `AnchorWF s` hypothesis — `latestBlockHeader.slot = 0 → latestJustified.slot = 0 ∧ latestFinalized.slot = 0` — because the first block's genesis anchoring force-assigns slot-0 checkpoints, making the bare statement false for adversarial states; `AnchorWF` holds for every state reachable from genesis, ST-4):
 
     ```lean
     theorem checkpoint_monotone
@@ -236,6 +237,8 @@ The propositions here guarantee that **the STF advances state as expected**: aft
         (h : State.transition s b = .ok s') :
         s.latestJustified.slot ≤ s'.latestJustified.slot ∧
         s.latestFinalized.slot ≤ s'.latestFinalized.slot := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as `State.checkpoint_monotone`
+    --    (with the additional hypothesis `hwf : AnchorWF s`)
     ```
 
 - [ ] **ST-4: The justified slot is always at least the finalized slot**
@@ -259,16 +262,19 @@ The propositions here guarantee that **the STF advances state as expected**: aft
     -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as `State.state_transition_pure`
     ```
 
-- [ ] **ST-6: Finalization is irreversible**
+- [x] **ST-6: Finalization is irreversible**
   - Source: `state_transition` (global invariant under arbitrary repeated application)
   - Note: The same STF as ST-3.
-  - Sample code:
+  - Proved at: `LeanSpec/Forks/Lstar/StateTransition.lean` (`State.finalization_irreversible`, the `latestFinalized` half of ST-3)
+  - Sample code (same `AnchorWF s` hypothesis as ST-3):
 
     ```lean
     theorem finalization_irreversible
         (s s' : State) (b : Block)
         (h : State.transition s b = .ok s') :
         s.latestFinalized.slot ≤ s'.latestFinalized.slot := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as
+    --    `State.finalization_irreversible` (with `hwf : AnchorWF s`)
     ```
 
 ## Fork Choice
