@@ -70,13 +70,13 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
-| ST | 5 | 1 | 0 | 6 |
+| ST | 6 | 0 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
 | VAL | 0 | 5 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **11** | **19** | **1** | **31** |
+| **Total** | **12** | **18** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -241,13 +241,17 @@ The propositions here guarantee that **the STF advances state as expected**: aft
     --    (with the additional hypothesis `hwf : AnchorWF s`)
     ```
 
-- [ ] **ST-4: The justified slot is always at least the finalized slot**
-  - Source: `process_justification_and_finalization` (and related `process_*`; a reachable-state invariant maintained by multiple functions)
+- [x] **ST-4: The justified slot is always at least the finalized slot**
+  - Source: `process_justification_and_finalization` (and related `process_*`; a reachable-state invariant maintained by multiple functions — realized as `process_attestations` in current leanSpec)
+  - Proved at: `LeanSpec/Forks/Lstar/Reachable.lean` (`justified_ge_finalized`, by induction on `Reachable`; per-phase preservation lemmas in `LeanSpec/Forks/Lstar/StateTransition.lean`)
   - Sample code:
 
     ```lean
     theorem justified_ge_finalized (s : State) (hreach : Reachable s) :
         s.latestJustified.slot ≥ s.latestFinalized.slot := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Reachable.lean as `justified_ge_finalized`
+    --    (Reachable also discharges the AnchorWF hypothesis of ST-3 / ST-6:
+    --     see `checkpoint_monotone_of_reachable` / `finalization_irreversible_of_reachable`)
     ```
 
 - [x] **ST-5: The state transition function is pure**
