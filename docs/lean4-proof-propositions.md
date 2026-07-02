@@ -70,13 +70,13 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
-| ST | 2 | 4 | 0 | 6 |
+| ST | 3 | 3 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
 | VAL | 0 | 5 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **8** | **22** | **1** | **31** |
+| **Total** | **9** | **21** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -247,10 +247,17 @@ The propositions here guarantee that **the STF advances state as expected**: aft
         s.latestJustified.slot ≥ s.latestFinalized.slot := by sorry
     ```
 
-- [ ] **ST-5: The state transition function is pure**
-  - Source: `state_transition` (a meta-property of the entire signature)
+- [x] **ST-5: The state transition function is pure**
+  - Source: `state_transition` (a meta-property of the entire signature; `src/lean_spec/spec/forks/lstar/state_transition.py`)
   - Note: The same STF as ST-3. Identical inputs always yield identical outputs.
+  - Proved at: `LeanSpec/Forks/Lstar/StateTransition.lean` (`State.state_transition_pure`)
   - Sample code: written as a `@[simp]` lemma.
+
+    ```lean
+    @[simp] theorem state_transition_pure (s : State) (b : Block) :
+        State.transition s b = State.transition s b := rfl
+    -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as `State.state_transition_pure`
+    ```
 
 - [ ] **ST-6: Finalization is irreversible**
   - Source: `state_transition` (global invariant under arbitrary repeated application)
