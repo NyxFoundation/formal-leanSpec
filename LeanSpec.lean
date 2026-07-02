@@ -4,6 +4,7 @@ import LeanSpec.Forks.Lstar.Containers.Attestation
 import LeanSpec.Forks.Lstar.Containers.Block
 import LeanSpec.Forks.Lstar.Containers.Checkpoint
 import LeanSpec.Forks.Lstar.Containers.Genesis
+import LeanSpec.Forks.Lstar.Containers.Identifiers
 import LeanSpec.Forks.Lstar.Containers.State
 import LeanSpec.Forks.Lstar.Containers.Validator
 import LeanSpec.Forks.Lstar.Errors
