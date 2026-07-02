@@ -36,13 +36,26 @@ Divergences from Python, documented per function:
     the final re-pack sorts roots bytewise-lexicographically, matching
     Python's `sorted` on `bytes`.
 
-Proves ST-1, ST-2, and ST-5 from `docs/lean4-proof-propositions.md`:
+Proves ST-1, ST-2, ST-3, ST-5, and ST-6 from
+`docs/lean4-proof-propositions.md`:
   - ST-1: `∀ s target, s.slot ≤ target →
       (State.processSlots s target).slot = target`.
   - ST-2: `State.processBlockHeader s b = .ok s' →
       s'.latestBlockHeader.slot = b.slot`.
+  - ST-3: successful transitions never decrease `latestJustified.slot` or
+    `latestFinalized.slot` (`checkpoint_monotone`).
   - ST-5: `State.transition` is a pure function — identical inputs yield
     identical outputs.
+  - ST-6: finalization is irreversible — the `latestFinalized` half of
+    ST-3 (`finalization_irreversible`).
+
+ST-3 / ST-6 carry one hypothesis beyond the catalog samples: the
+genesis-anchoring well-formedness `latestBlockHeader.slot = 0 →
+latestJustified.slot = 0 ∧ latestFinalized.slot = 0`. Upstream's first
+block force-assigns slot-0 checkpoints (the genesis anchor), so the bare
+statement is false for adversarially constructed states whose checkpoints
+sit above slot 0 while no block has ever been applied. The hypothesis is
+exactly what reachability from genesis guarantees (ST-4's `Reachable`).
 -/
 
 import LeanSpec.Forks.Lstar.Config
@@ -380,6 +393,219 @@ proof is `rfl`; the theorem records the meta-property the catalog tracks
 and is usable by future composition proofs. -/
 @[simp] theorem state_transition_pure (s : State) (b : Block) :
     transition s b = transition s b := rfl
+
+/-! ## ST-3 / ST-6: checkpoint monotonicity -/
+
+/-- Genesis-anchoring well-formedness: before the first block is applied,
+both checkpoints still sit at slot 0. Holds for every state reachable from
+genesis; required because the first block force-assigns slot-0 checkpoints
+(the genesis anchor in `process_block_header`). -/
+def AnchorWF (s : State) : Prop :=
+  s.latestBlockHeader.slot = 0 →
+    s.latestJustified.slot = 0 ∧ s.latestFinalized.slot = 0
+
+/-- `processSlots` only advances `slot`; the checkpoints and the latest
+block header are untouched. -/
+theorem processSlots_checkpoints (s : State) (target : Slot) :
+    (processSlots s target).latestJustified = s.latestJustified ∧
+    (processSlots s target).latestFinalized = s.latestFinalized ∧
+    (processSlots s target).latestBlockHeader = s.latestBlockHeader := by
+  induction s using processSlots.induct (target := target) with
+  | case1 s hlt ih =>
+    rw [processSlots, dif_pos hlt]
+    exact ih
+  | case2 s hnlt =>
+    rw [processSlots, dif_neg hnlt]
+    exact ⟨rfl, rfl, rfl⟩
+
+/-- `applyJustification` moves both checkpoints forward only: the justified
+checkpoint is replaced only by a strictly later target, and the finalized
+checkpoint only by a source strictly past the old finalized slot. -/
+theorem applyJustification_mono (rootSlot : Root → Option Nat) (acc : JFAcc)
+    (src tgt : Checkpoint) :
+    acc.latestJustified.slot ≤
+        (applyJustification rootSlot acc src tgt).latestJustified.slot ∧
+    acc.latestFinalized.slot ≤
+        (applyJustification rootSlot acc src tgt).latestFinalized.slot := by
+  unfold applyJustification
+  dsimp only
+  split
+  · next hfin =>
+    refine ⟨?_, UInt64.le_of_lt hfin.1⟩
+    split
+    · next hlt => exact UInt64.le_of_lt hlt
+    · exact UInt64.le_refl _
+  · refine ⟨?_, UInt64.le_refl _⟩
+    split
+    · next hlt => exact UInt64.le_of_lt hlt
+    · exact UInt64.le_refl _
+
+/-- One attestation step never decreases either checkpoint slot: the vote
+filters leave the accumulator unchanged, a stored tally touches neither
+checkpoint, and the supermajority path is `applyJustification`. -/
+theorem processAttestation_mono (validatorCount : Nat) (hist : Array Root)
+    (rootSlot : Root → Option Nat) (acc acc' : JFAcc)
+    (att : AggregatedAttestation)
+    (h : processAttestation validatorCount hist rootSlot acc att = .ok acc') :
+    acc.latestJustified.slot ≤ acc'.latestJustified.slot ∧
+    acc.latestFinalized.slot ≤ acc'.latestFinalized.slot := by
+  unfold processAttestation at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · injection h with h'
+    subst h'
+    exact ⟨UInt64.le_refl _, UInt64.le_refl _⟩
+  · split at h
+    · simp at h
+    · injection h with h'
+      subst h'
+      exact ⟨UInt64.le_refl _, UInt64.le_refl _⟩
+    · split at h
+      · injection h with h'
+        subst h'
+        exact ⟨UInt64.le_refl _, UInt64.le_refl _⟩
+      · split at h
+        · injection h with h'
+          subst h'
+          exact ⟨UInt64.le_refl _, UInt64.le_refl _⟩
+        · split at h
+          · injection h with h'
+            subst h'
+            exact ⟨UInt64.le_refl _, UInt64.le_refl _⟩
+          · split at h
+            · simp at h
+            · split at h
+              · simp at h
+              · split at h
+                · injection h with h'
+                  subst h'
+                  exact ⟨UInt64.le_refl _, UInt64.le_refl _⟩
+                · injection h with h'
+                  subst h'
+                  exact applyJustification_mono rootSlot acc att.data.source
+                    att.data.target
+
+/-- Folding attestation steps preserves checkpoint monotonicity. -/
+theorem foldlM_processAttestation_mono (validatorCount : Nat)
+    (hist : Array Root) (rootSlot : Root → Option Nat) :
+    ∀ (atts : List AggregatedAttestation) (acc acc' : JFAcc),
+    List.foldlM (processAttestation validatorCount hist rootSlot) acc atts
+      = .ok acc' →
+    acc.latestJustified.slot ≤ acc'.latestJustified.slot ∧
+    acc.latestFinalized.slot ≤ acc'.latestFinalized.slot
+  | [], acc, acc', h => by
+    injection h with h'
+    subst h'
+    exact ⟨UInt64.le_refl _, UInt64.le_refl _⟩
+  | att :: atts, acc, acc', h => by
+    rw [List.foldlM_cons] at h
+    cases hstep : processAttestation validatorCount hist rootSlot acc att with
+    | error e =>
+      rw [hstep] at h
+      injection h
+    | ok acc₁ =>
+      rw [hstep] at h
+      have hrest :
+          List.foldlM (processAttestation validatorCount hist rootSlot) acc₁
+            atts = .ok acc' := h
+      have h1 := processAttestation_mono validatorCount hist rootSlot acc acc₁
+        att hstep
+      have h2 := foldlM_processAttestation_mono validatorCount hist rootSlot
+        atts acc₁ acc' hrest
+      exact ⟨UInt64.le_trans h1.1 h2.1, UInt64.le_trans h1.2 h2.2⟩
+
+/-- `processAttestations` never decreases either checkpoint slot. -/
+theorem processAttestations_mono (s s' : State)
+    (atts : List AggregatedAttestation)
+    (h : processAttestations s atts = .ok s') :
+    s.latestJustified.slot ≤ s'.latestJustified.slot ∧
+    s.latestFinalized.slot ≤ s'.latestFinalized.slot := by
+  unfold processAttestations at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · split at h
+    · simp at h
+    · next acc heq =>
+      injection h with h'
+      subst h'
+      exact foldlM_processAttestation_mono _ _ _ atts _ acc heq
+
+/-- `processBlockHeader` never decreases either checkpoint slot on an
+anchor-well-formed state: the genesis anchor overwrites slot-0 checkpoints
+with slot-0 checkpoints, and every later block keeps them. -/
+theorem processBlockHeader_mono (s s' : State) (b : Block)
+    (hwf : AnchorWF s)
+    (h : processBlockHeader s b = .ok s') :
+    s.latestJustified.slot ≤ s'.latestJustified.slot ∧
+    s.latestFinalized.slot ≤ s'.latestFinalized.slot := by
+  unfold processBlockHeader at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · split at h
+    · simp at h
+    · split at h
+      · simp at h
+      · split at h
+        · simp at h
+        · injection h with h'
+          subst h'
+          constructor
+          · show s.latestJustified.slot ≤
+              (if s.latestBlockHeader.slot = 0 then
+                ({ root := b.parentRoot, slot := 0 } : Checkpoint)
+              else s.latestJustified).slot
+            split
+            · next hz =>
+              rw [(hwf hz).1]
+              exact UInt64.le_refl _
+            · exact UInt64.le_refl _
+          · show s.latestFinalized.slot ≤
+              (if s.latestBlockHeader.slot = 0 then
+                ({ root := b.parentRoot, slot := 0 } : Checkpoint)
+              else s.latestFinalized).slot
+            split
+            · next hz =>
+              rw [(hwf hz).2]
+              exact UInt64.le_refl _
+            · exact UInt64.le_refl _
+
+/-- ST-3: checkpoint slots are monotonically non-decreasing across a
+successful state transition (see the module docstring for the
+genesis-anchoring hypothesis). -/
+theorem checkpoint_monotone
+    (s s' : State) (b : Block)
+    (hwf : AnchorWF s)
+    (h : transition s b = .ok s') :
+    s.latestJustified.slot ≤ s'.latestJustified.slot ∧
+    s.latestFinalized.slot ≤ s'.latestFinalized.slot := by
+  unfold transition at h
+  split at h
+  · simp at h
+  · unfold processBlock at h
+    split at h
+    · simp at h
+    · next s₁ hh =>
+      have hps := processSlots_checkpoints s b.slot
+      have hwf' : AnchorWF (processSlots s b.slot) := by
+        intro hz
+        rw [hps.1, hps.2.1]
+        exact hwf (hps.2.2 ▸ hz)
+      have h1 := processBlockHeader_mono _ _ _ hwf' hh
+      have h2 := processAttestations_mono _ _ _ h
+      rw [hps.1, hps.2.1] at h1
+      exact ⟨UInt64.le_trans h1.1 h2.1, UInt64.le_trans h1.2 h2.2⟩
+
+/-- ST-6: finalization is irreversible — a successful transition never
+rolls `latestFinalized.slot` backward. The `latestFinalized` half of ST-3. -/
+theorem finalization_irreversible
+    (s s' : State) (b : Block)
+    (hwf : AnchorWF s)
+    (h : transition s b = .ok s') :
+    s.latestFinalized.slot ≤ s'.latestFinalized.slot :=
+  (checkpoint_monotone s s' b hwf h).right
 
 end State
 end LeanSpec.Forks.Lstar
