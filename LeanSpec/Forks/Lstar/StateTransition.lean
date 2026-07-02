@@ -607,5 +607,197 @@ theorem finalization_irreversible
     s.latestFinalized.slot ≤ s'.latestFinalized.slot :=
   (checkpoint_monotone s s' b hwf h).right
 
+/-! ## Justified-vs-finalized preservation (ST-4 support)
+
+Each phase of the transition preserves the reachable-state invariant
+`latestFinalized.slot ≤ latestJustified.slot`, proved here per phase and
+consumed by `Reachable`-induction in `LeanSpec/Forks/Lstar/Reachable.lean`.
+-/
+
+/-- `applyJustification` preserves `finalized ≤ justified`: when the source
+finalizes, the justified checkpoint sits at or above the strictly-later
+target; otherwise the finalized checkpoint is unchanged and the justified
+one only moves forward. Requires `src.slot < tgt.slot`, which the vote
+filters guarantee. -/
+theorem applyJustification_jf (rootSlot : Root → Option Nat) (acc : JFAcc)
+    (src tgt : Checkpoint)
+    (hlt : src.slot < tgt.slot)
+    (hj : acc.latestFinalized.slot ≤ acc.latestJustified.slot) :
+    (applyJustification rootSlot acc src tgt).latestFinalized.slot ≤
+    (applyJustification rootSlot acc src tgt).latestJustified.slot := by
+  unfold applyJustification
+  dsimp only
+  split
+  · show src.slot ≤
+      (if acc.latestJustified.slot < tgt.slot then tgt
+       else acc.latestJustified).slot
+    split
+    · exact UInt64.le_of_lt hlt
+    · next hnlt =>
+      exact UInt64.le_trans (UInt64.le_of_lt hlt) (UInt64.not_lt.mp hnlt)
+  · show acc.latestFinalized.slot ≤
+      (if acc.latestJustified.slot < tgt.slot then tgt
+       else acc.latestJustified).slot
+    split
+    · next hlt2 => exact UInt64.le_trans hj (UInt64.le_of_lt hlt2)
+    · exact hj
+
+/-- One attestation step preserves `finalized ≤ justified`. -/
+theorem processAttestation_jf (validatorCount : Nat) (hist : Array Root)
+    (rootSlot : Root → Option Nat) (acc acc' : JFAcc)
+    (att : AggregatedAttestation)
+    (h : processAttestation validatorCount hist rootSlot acc att = .ok acc')
+    (hj : acc.latestFinalized.slot ≤ acc.latestJustified.slot) :
+    acc'.latestFinalized.slot ≤ acc'.latestJustified.slot := by
+  unfold processAttestation at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · injection h with h'; subst h'; exact hj
+  · split at h
+    · simp at h
+    · injection h with h'; subst h'; exact hj
+    · split at h
+      · injection h with h'; subst h'; exact hj
+      · split at h
+        · injection h with h'; subst h'; exact hj
+        · next hnle =>
+          split at h
+          · injection h with h'; subst h'; exact hj
+          · split at h
+            · simp at h
+            · split at h
+              · simp at h
+              · split at h
+                · injection h with h'; subst h'; exact hj
+                · injection h with h'; subst h'
+                  exact applyJustification_jf rootSlot acc att.data.source
+                    att.data.target (UInt64.not_le.mp hnle) hj
+
+/-- Folding attestation steps preserves `finalized ≤ justified`. -/
+theorem foldlM_processAttestation_jf (validatorCount : Nat)
+    (hist : Array Root) (rootSlot : Root → Option Nat) :
+    ∀ (atts : List AggregatedAttestation) (acc acc' : JFAcc),
+    List.foldlM (processAttestation validatorCount hist rootSlot) acc atts
+      = .ok acc' →
+    acc.latestFinalized.slot ≤ acc.latestJustified.slot →
+    acc'.latestFinalized.slot ≤ acc'.latestJustified.slot
+  | [], acc, acc', h, hj => by
+    injection h with h'
+    subst h'
+    exact hj
+  | att :: atts, acc, acc', h, hj => by
+    rw [List.foldlM_cons] at h
+    cases hstep : processAttestation validatorCount hist rootSlot acc att with
+    | error e =>
+      rw [hstep] at h
+      injection h
+    | ok acc₁ =>
+      rw [hstep] at h
+      have hrest :
+          List.foldlM (processAttestation validatorCount hist rootSlot) acc₁
+            atts = .ok acc' := h
+      exact foldlM_processAttestation_jf validatorCount hist rootSlot atts acc₁
+        acc' hrest
+        (processAttestation_jf validatorCount hist rootSlot acc acc₁ att hstep hj)
+
+/-- `processAttestations` preserves `finalized ≤ justified`. -/
+theorem processAttestations_jf (s s' : State)
+    (atts : List AggregatedAttestation)
+    (h : processAttestations s atts = .ok s')
+    (hj : s.latestFinalized.slot ≤ s.latestJustified.slot) :
+    s'.latestFinalized.slot ≤ s'.latestJustified.slot := by
+  unfold processAttestations at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · split at h
+    · simp at h
+    · next acc heq =>
+      injection h with h'
+      subst h'
+      exact foldlM_processAttestation_jf _ _ _ atts _ acc heq hj
+
+/-- `processAttestations` never touches the latest block header. -/
+theorem processAttestations_header (s s' : State)
+    (atts : List AggregatedAttestation)
+    (h : processAttestations s atts = .ok s') :
+    s'.latestBlockHeader = s.latestBlockHeader := by
+  unfold processAttestations at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · split at h
+    · simp at h
+    · injection h with h'
+      subst h'
+      rfl
+
+/-- `processBlockHeader` preserves `finalized ≤ justified`: the genesis
+anchor sets both checkpoints to slot 0, and every later block keeps them. -/
+theorem processBlockHeader_jf (s s' : State) (b : Block)
+    (h : processBlockHeader s b = .ok s')
+    (hj : s.latestFinalized.slot ≤ s.latestJustified.slot) :
+    s'.latestFinalized.slot ≤ s'.latestJustified.slot := by
+  unfold processBlockHeader at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · split at h
+    · simp at h
+    · split at h
+      · simp at h
+      · split at h
+        · simp at h
+        · injection h with h'
+          subst h'
+          by_cases hz : s.latestBlockHeader.slot = 0
+          · simp only [if_pos hz]
+            exact UInt64.le_refl _
+          · simp only [if_neg hz]
+            exact hj
+
+/-- A successful transition requires a strictly-future block slot. -/
+theorem transition_slot_lt (s s' : State) (b : Block)
+    (h : transition s b = .ok s') :
+    s.slot < b.slot := by
+  unfold transition at h
+  split at h
+  · simp at h
+  · next hn => exact UInt64.not_le.mp hn
+
+/-- After a successful transition the latest header carries the block's
+slot (ST-2 lifted through the full transition). -/
+theorem transition_header_slot (s s' : State) (b : Block)
+    (h : transition s b = .ok s') :
+    s'.latestBlockHeader.slot = b.slot := by
+  unfold transition at h
+  split at h
+  · simp at h
+  · unfold processBlock at h
+    split at h
+    · simp at h
+    · next s₁ hh =>
+      rw [processAttestations_header _ _ _ h]
+      exact process_block_header_slot _ _ _ hh
+
+/-- The full transition preserves `finalized ≤ justified`. -/
+theorem transition_jf (s s' : State) (b : Block)
+    (h : transition s b = .ok s')
+    (hj : s.latestFinalized.slot ≤ s.latestJustified.slot) :
+    s'.latestFinalized.slot ≤ s'.latestJustified.slot := by
+  unfold transition at h
+  split at h
+  · simp at h
+  · unfold processBlock at h
+    split at h
+    · simp at h
+    · next s₁ hh =>
+      have hps := processSlots_checkpoints s b.slot
+      refine processAttestations_jf _ _ _ h
+        (processBlockHeader_jf _ _ _ hh ?_)
+      rw [hps.1, hps.2.1]
+      exact hj
+
 end State
 end LeanSpec.Forks.Lstar

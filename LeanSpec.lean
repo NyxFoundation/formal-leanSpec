@@ -7,6 +7,7 @@ import LeanSpec.Forks.Lstar.Containers.Genesis
 import LeanSpec.Forks.Lstar.Containers.State
 import LeanSpec.Forks.Lstar.Containers.Validator
 import LeanSpec.Forks.Lstar.Errors
+import LeanSpec.Forks.Lstar.Reachable
 import LeanSpec.Forks.Lstar.Slot
 import LeanSpec.Forks.Lstar.StateTransition
 import LeanSpec.SSZ.Boolean
