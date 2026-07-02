@@ -1,6 +1,6 @@
 ---
 title: leanSpec → Lean4 Theorem Proving Proposition Catalog
-last_updated: 2026-06-02
+last_updated: 2026-07-02
 tags:
   - lean4
   - formal-verification
@@ -68,7 +68,7 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 
 | Domain | Proved | Open | Axiom | Total |
 |---|---:|---:|---:|---:|
-| SSZ | 5 | 1 | 1 | 7 |
+| SSZ | 6 | 0 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
 | ST | 0 | 6 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
@@ -76,7 +76,7 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **5** | **25** | **1** | **31** |
+| **Total** | **6** | **24** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -139,15 +139,17 @@ The propositions here guarantee the **mathematical soundness of the encoder**: r
     -- ✅ proved in LeanSpec/SSZ/Vector.lean as `SSZVector.sszvector_length`
     ```
 
-- [ ] **SSZ-6: Rounding up to a power of two yields the smallest such value ≥ the input**
-  - Source: `get_power_of_two_ceil`
+- [x] **SSZ-6: Rounding up to a power of two yields the smallest such value ≥ the input**
+  - Source: `get_power_of_two_ceil` (renamed `_next_pow2` in current leanSpec, `src/lean_spec/spec/crypto/merkleization.py`)
   - Note: Returns the smallest power of two that is at least `x` (used in Merkle-tree padding to make leaf counts powers of two).
-  - Sample code:
+  - Proved at: `LeanSpec/SSZ/Utils.lean` (`ceil_pow2_minimal`)
+  - Sample code (`ceilPow2` realized as `getPowerOfTwoCeil`, mirroring the Python name):
 
     ```lean
     theorem ceil_pow2_minimal (x : Nat) (h : 0 < x) :
         x ≤ ceilPow2 x ∧ ∃ k, ceilPow2 x = 2 ^ k ∧
           (k = 0 ∨ 2 ^ (k - 1) < x) := by sorry
+    -- ✅ proved in LeanSpec/SSZ/Utils.lean as `ceil_pow2_minimal`
     ```
 
 - [axiom] **SSZ-7: Merkle root computation is deterministic**
