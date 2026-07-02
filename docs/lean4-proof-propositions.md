@@ -70,13 +70,13 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
-| ST | 1 | 5 | 0 | 6 |
+| ST | 2 | 4 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
 | VAL | 0 | 5 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **7** | **23** | **1** | **31** |
+| **Total** | **8** | **22** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -211,9 +211,10 @@ The propositions here guarantee that **the STF advances state as expected**: aft
     -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as `State.process_slots_advances`
     ```
 
-- [ ] **ST-2: After applying a block header, latest-header slot equals block slot**
-  - Source: `process_block_header`
+- [x] **ST-2: After applying a block header, latest-header slot equals block slot**
+  - Source: `process_block_header` (`src/lean_spec/spec/forks/lstar/state_transition.py`)
   - Note: Applies the header part of a block to the state and updates `latest_block_header`.
+  - Proved at: `LeanSpec/Forks/Lstar/StateTransition.lean` (`State.process_block_header_slot`)
   - Sample code:
 
     ```lean
@@ -221,6 +222,7 @@ The propositions here guarantee that **the STF advances state as expected**: aft
         (s : State) (b : Block) (s' : State)
         (h : State.processBlockHeader s b = .ok s') :
         s'.latestBlockHeader.slot = b.slot := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as `State.process_block_header_slot`
     ```
 
 - [ ] **ST-3: Checkpoint slots are monotonically non-decreasing across transitions**
