@@ -6,6 +6,9 @@ Mirrors `src/lean_spec/spec/forks/lstar/state_transition.py` in leanSpec:
     advance `state.slot` by one.
   - `process_block_header(state, block)`: validate the header checks and
     install the block as `latest_block_header`.
+  - `state_transition(state, block)`: the complete transition — reject
+    blocks not strictly in the future, advance empty slots, apply the
+    block.
 
 Divergences from Python, documented per function:
   - `process_slots` upstream raises `BLOCK_SLOT_NOT_IN_FUTURE` when
@@ -24,11 +27,13 @@ Divergences from Python, documented per function:
     (`historical_block_hashes`, `justified_slots`) also wait for the full
     `State` (ST-3/ST-6).
 
-Proves ST-1 and ST-2 from `docs/lean4-proof-propositions.md`:
+Proves ST-1, ST-2, and ST-5 from `docs/lean4-proof-propositions.md`:
   - ST-1: `∀ s target, s.slot ≤ target →
       (State.processSlots s target).slot = target`.
   - ST-2: `State.processBlockHeader s b = .ok s' →
       s'.latestBlockHeader.slot = b.slot`.
+  - ST-5: `State.transition` is a pure function — identical inputs yield
+    identical outputs.
 -/
 
 import LeanSpec.Forks.Lstar.Containers.State
@@ -113,6 +118,26 @@ theorem process_block_header_slot
     · injection h with h'
       subst h'
       rfl
+
+/-- Apply the complete state transition function for a block
+(`state_transition`). Rejects a block whose slot is not strictly in the
+future (`BLOCK_SLOT_NOT_IN_FUTURE`, raised upstream inside
+`process_slots`), advances empty slots, then applies the block header.
+Attestation processing (`process_block` body) and the post-state-root
+check need the full `State` and `hash_tree_root` instances — deferred to
+ST-3 / ST-4 / ST-6. -/
+def transition (s : State) (b : Block) : ST.Result State :=
+  if b.slot ≤ s.slot then
+    .error (.slotNotInFuture s.slot b.slot)
+  else
+    processBlockHeader (processSlots s b.slot) b
+
+/-- ST-5: the state transition function is pure — identical inputs always
+yield identical outputs. Lean `def`s are pure by construction, so the
+proof is `rfl`; the theorem records the meta-property the catalog tracks
+and is usable by future composition proofs. -/
+@[simp] theorem state_transition_pure (s : State) (b : Block) :
+    transition s b = transition s b := rfl
 
 end State
 end LeanSpec.Forks.Lstar
