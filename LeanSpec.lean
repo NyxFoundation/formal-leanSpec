@@ -1,3 +1,9 @@
+import LeanSpec.Aliases
+import LeanSpec.Forks.Lstar.Containers.Attestation
+import LeanSpec.Forks.Lstar.Containers.Block
+import LeanSpec.Forks.Lstar.Containers.Checkpoint
+import LeanSpec.Forks.Lstar.Containers.State
+import LeanSpec.Forks.Lstar.Errors
 import LeanSpec.SSZ.Boolean
 import LeanSpec.SSZ.Bytes32
 import LeanSpec.SSZ.Hash
