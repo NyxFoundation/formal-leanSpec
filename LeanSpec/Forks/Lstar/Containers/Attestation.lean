@@ -26,6 +26,17 @@ namespace LeanSpec.Forks.Lstar
 (SSZ bitlist bounded by `VALIDATOR_REGISTRY_LIMIT` upstream). -/
 abbrev AggregationBits := Array Bool
 
+namespace AggregationBits
+
+/-- All validator indices encoded in these aggregation bits, in ascending
+order (`to_validator_indices`, `containers/participation.py`). Upstream
+raises `EMPTY_AGGREGATION_BITS` when no bits are set; here the caller
+checks emptiness of the returned list. -/
+def toValidatorIndices (bits : AggregationBits) : List Nat :=
+  (List.range bits.size).filter fun i => bits[i]!
+
+end AggregationBits
+
 /-- Validator-specific attestation wrapping shared attestation data. -/
 structure Attestation where
   validatorIndex : ValidatorIndex
