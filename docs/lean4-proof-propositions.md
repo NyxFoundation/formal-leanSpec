@@ -1,6 +1,6 @@
 ---
 title: leanSpec → Lean4 Theorem Proving Proposition Catalog
-last_updated: 2026-07-02
+last_updated: 2026-07-03
 tags:
   - lean4
   - formal-verification
@@ -69,14 +69,14 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | Domain | Proved | Open | Axiom | Total |
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
-| CONT | 0 | 2 | 0 | 2 |
+| CONT | 1 | 1 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
 | VAL | 0 | 5 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **12** | **18** | **1** | **31** |
+| **Total** | **13** | **17** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -179,9 +179,10 @@ A **Container** is a composite SSZ type — a struct with named fields (analogou
         c1 < c2 ↔ c1.slot < c2.slot := by sorry
     ```
 
-- [ ] **CONT-2: justifiable holds iff the slot distance is one of three forms**
-  - Source: `is_justifiable_after`
+- [x] **CONT-2: justifiable holds iff the slot distance is one of three forms**
+  - Source: `is_justifiable_after` (`src/lean_spec/spec/forks/lstar/slot.py`)
   - Note: Decides whether the target slot is at a justifiable distance from the finalized-checkpoint slot (LMD-CASPER justification-candidate check).
+  - Proved at: `LeanSpec/Forks/Lstar/Slot.lean` (`Slot.justifiable_iff`, via correctness of the hand-rolled `isqrt`: `isqrt_le` / `isqrt_lt_succ` / `isqrt_eq`)
   - Sample code:
 
     ```lean
@@ -190,6 +191,7 @@ A **Container** is a composite SSZ type — a struct with named fields (analogou
         Slot.isJustifiableAfter finalized target ↔
           let δ := target.toNat - finalized.toNat
           δ ≤ 5 ∨ (∃ k, δ = k * k) ∨ (∃ k, δ = k * (k + 1)) := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Slot.lean as `Slot.justifiable_iff`
     ```
 
 ## State Transition
