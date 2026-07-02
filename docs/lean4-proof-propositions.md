@@ -152,14 +152,16 @@ The propositions here guarantee the **mathematical soundness of the encoder**: r
     -- ✅ proved in LeanSpec/SSZ/Utils.lean as `ceil_pow2_minimal`
     ```
 
-- [axiom] **SSZ-7: Merkle root computation is deterministic**
-  - Source: `hash_tree_root`
+- [axiom] **SSZ-7: Distinct values produce distinct hash-tree roots (collision resistance)**
+  - Source: `hash_tree_root` (`src/lean_spec/spec/crypto/merkleization.py`)
+  - Declared at: `LeanSpec/SSZ/Hash.lean` (`HashTreeRoot.collisionResistance`)
   - Sample code:
 
     ```lean
     axiom HashTreeRoot.collisionResistance :
         ∀ x y, hashTreeRoot x = hashTreeRoot y → x = y
     -- Note: not a strict theorem; used as a cryptographic assumption.
+    -- ✅ declared in LeanSpec/SSZ/Hash.lean as `HashTreeRoot.collisionResistance`
     ```
 
 ## Containers
