@@ -8,8 +8,13 @@ Mirrors `src/lean_spec/spec/forks/lstar/containers/checkpoint.py` in leanSpec:
   - `class AttestationData(Container)` — the three-checkpoint chain view
     (source, target, head) a validator attests to.
 
-Supports CONT-1 and the ST-* propositions from
-`docs/lean4-proof-propositions.md` (no theorems in this file).
+Proves CONT-1 from `docs/lean4-proof-propositions.md`:
+  - CONT-1: checkpoint ordering is determined by slot
+    (`checkpoint_lt_iff_slot_lt`). Upstream has no explicit `__lt__`; the
+    comparison in use is the slot comparison inside `advance_to`, which the
+    `LT Checkpoint` instance packages.
+
+Also supports the ST-* propositions.
 -/
 
 import LeanSpec.Aliases
@@ -29,6 +34,23 @@ namespace Checkpoint
 its slot is strictly higher, enforcing forward-only progression. -/
 def advanceTo (self candidate : Checkpoint) : Checkpoint :=
   if candidate.slot > self.slot then candidate else self
+
+/-- Checkpoints are strictly ordered by their slot — the comparison in use
+inside `advance_to`. -/
+instance : LT Checkpoint := ⟨fun a b => a.slot < b.slot⟩
+
+instance : DecidableRel (α := Checkpoint) (· < ·) :=
+  fun a b => inferInstanceAs (Decidable (a.slot < b.slot))
+
+/-- CONT-1: checkpoint ordering is determined by slot. -/
+theorem checkpoint_lt_iff_slot_lt (c1 c2 : Checkpoint) :
+    c1 < c2 ↔ c1.slot < c2.slot := Iff.rfl
+
+/-- `advanceTo` in terms of the checkpoint order: the candidate replaces
+this checkpoint exactly when it is strictly later. -/
+theorem advanceTo_eq_ite (self candidate : Checkpoint) :
+    self.advanceTo candidate =
+      if self < candidate then candidate else self := rfl
 
 end Checkpoint
 

@@ -69,14 +69,14 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | Domain | Proved | Open | Axiom | Total |
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
-| CONT | 1 | 1 | 0 | 2 |
+| CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
 | VAL | 0 | 5 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **13** | **17** | **1** | **31** |
+| **Total** | **14** | **16** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -170,13 +170,16 @@ A **Container** is a composite SSZ type — a struct with named fields (analogou
 
 `Checkpoint` in particular is the core of the finality machinery — fork choice decides the head based on "which checkpoint is justified / finalized" — so the **total order** between Checkpoints, and whether a target is at a **justifiable distance** from a given finalized checkpoint (the disjunction `δ ≤ 5`, `δ = k²`, `δ = k(k+1)`), are natural targets for propositions. Implementations live in `LeanSpec/Containers/*`.
 
-- [ ] **CONT-1: Checkpoint ordering is determined by slot**
-  - Source: `Checkpoint` (comparison operator)
+- [x] **CONT-1: Checkpoint ordering is determined by slot**
+  - Source: `Checkpoint` (comparison operator; upstream has no explicit `__lt__` — the order in use is the slot comparison inside `advance_to`, `src/lean_spec/spec/forks/lstar/containers/checkpoint.py`)
+  - Proved at: `LeanSpec/Forks/Lstar/Containers/Checkpoint.lean` (`Checkpoint.checkpoint_lt_iff_slot_lt`; `advanceTo_eq_ite` connects the order to `advance_to`)
   - Sample code:
 
     ```lean
     theorem checkpoint_lt_iff_slot_lt (c1 c2 : Checkpoint) :
         c1 < c2 ↔ c1.slot < c2.slot := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Containers/Checkpoint.lean as
+    --    `Checkpoint.checkpoint_lt_iff_slot_lt`
     ```
 
 - [x] **CONT-2: justifiable holds iff the slot distance is one of three forms**
