@@ -70,13 +70,13 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 0 | 2 | 0 | 2 |
-| ST | 0 | 6 | 0 | 6 |
+| ST | 1 | 5 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
 | VAL | 0 | 5 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **6** | **24** | **1** | **31** |
+| **Total** | **7** | **23** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -198,15 +198,17 @@ The **State Transition Function (STF)** is the pure function that computes the n
 
 The propositions here guarantee that **the STF advances state as expected**: after `process_slots`, `state.slot` reaches the target; after `process_block_header`, `latest_block_header.slot` matches the block's slot; the justified/finalized slots are monotonically non-decreasing across transitions; `justified.slot ≥ finalized.slot` always holds; and ultimately **finalization is irreversible** (we never roll back to a slot earlier than an already-finalized checkpoint). If these break, defenses against forking attacks and reorgs collapse. Implementations live in `LeanSpec/Forks/Lstar/State/*`.
 
-- [ ] **ST-1: Empty-slot advancement makes state.slot equal target**
-  - Source: `process_slots`
+- [x] **ST-1: Empty-slot advancement makes state.slot equal target**
+  - Source: `process_slots` (`src/lean_spec/spec/forks/lstar/state_transition.py`)
   - Note: Repeatedly advances state up to the target slot empty (no blocks).
+  - Proved at: `LeanSpec/Forks/Lstar/StateTransition.lean` (`State.process_slots_advances`)
   - Sample code:
 
     ```lean
     theorem process_slots_advances (s : State) (target : Slot)
         (h : s.slot ≤ target) :
         (State.processSlots s target).slot = target := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as `State.process_slots_advances`
     ```
 
 - [ ] **ST-2: After applying a block header, latest-header slot equals block slot**
