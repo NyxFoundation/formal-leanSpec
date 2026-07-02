@@ -21,5 +21,14 @@ namespace Bytes32
 
 theorem size_eq_32 (b : Bytes32) : b.size = 32 := b.property
 
+/-- The all-zero 32-byte value (`Bytes32.zero()` in leanSpec, aka `ZERO_HASH`). -/
+def zero : Bytes32 := ⟨⟨Array.replicate 32 0⟩, by simp [ByteArray.size]⟩
+
+instance : Inhabited Bytes32 := ⟨zero⟩
+
+instance : BEq Bytes32 := ⟨fun a b => a.val.data == b.val.data⟩
+
+instance : Repr Bytes32 := ⟨fun b n => reprPrec b.val.data n⟩
+
 end Bytes32
 end LeanSpec.SSZ
