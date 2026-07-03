@@ -11,11 +11,12 @@ leanSpec:
 `SubnetId` / `compute_subnet_id` and `is_within_registry` are added when a
 proposition consumes them.
 
-Proves VAL-1 from `docs/lean4-proof-propositions.md`:
+Proves VAL-1 and VAL-3 from `docs/lean4-proof-propositions.md`:
   - VAL-1: proposers are selected round-robin —
     `proposerForSlot slot n` is the validator index `slot % n`
     (`proposer_index_round_robin`), with the `toNat`-level corollary
     showing the `UInt64` construction never wraps.
+  - VAL-3: each slot has exactly one proposer (`unique_proposer`).
 -/
 
 import LeanSpec.Aliases
@@ -43,6 +44,24 @@ theorem proposerForSlot_toNat (slot : Slot) (n : Nat) :
   have h2 : slot.toNat < 2 ^ 64 := slot.toNat_lt
   have h3 : UInt64.size = 2 ^ 64 := rfl
   exact UInt64.toNat_ofNat_of_lt' (by omega)
+
+/-- Whether validator `vid`, in a registry of `n` validators, is the
+scheduled proposer of `slot` (`is_proposer`: equality with
+`proposer_for_slot`). Phrased on `Fin n` so registry membership is carried
+by the type, per the catalog. -/
+def isProposerFor {n : Nat} (vid : Fin n) (slot : Slot) : Prop :=
+  vid.val = slot.toNat % n
+
+/-- VAL-3: each slot has exactly one proposer — the round-robin index
+exists and any proposer equals it. The catalog's `∃!` is written in its
+expanded form (`ExistsUnique` lives in Mathlib, which this repo does not
+depend on). -/
+theorem unique_proposer (slot : Slot) (n : Nat) (h : 0 < n) :
+    ∃ vid : Fin n, isProposerFor vid slot ∧
+      ∀ vid' : Fin n, isProposerFor vid' slot → vid' = vid := by
+  refine ⟨⟨slot.toNat % n, Nat.mod_lt _ h⟩, rfl, ?_⟩
+  intro vid hvid
+  exact Fin.ext hvid
 
 end ValidatorIndex
 

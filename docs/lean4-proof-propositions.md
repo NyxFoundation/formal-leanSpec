@@ -72,11 +72,11 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
-| VAL | 1 | 4 | 0 | 5 |
+| VAL | 2 | 3 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **15** | **15** | **1** | **31** |
+| **Total** | **16** | **14** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -371,14 +371,17 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
         reg.proposalKey vid ≠ reg.attestationKey vid := by sorry
     ```
 
-- [ ] **VAL-3: Each slot has exactly one proposer**
-  - Source: `is_proposer` / `proposer_index` (ValidatorService)
+- [x] **VAL-3: Each slot has exactly one proposer**
+  - Source: `is_proposer` / `proposer_index` (ValidatorService; the check in use is equality with `proposer_for_slot`, e.g. in `validator_duties.py`)
   - Note: Decides whether validator `vid` is the proposer of `slot` (equivalent to `vid = slot mod n`).
+  - Proved at: `LeanSpec/Forks/Lstar/Containers/Identifiers.lean` (`ValidatorIndex.unique_proposer`; `∃!` written in expanded form since `ExistsUnique` is Mathlib-only)
   - Sample code:
 
     ```lean
     theorem unique_proposer (slot : Slot) (n : Nat) (h : 0 < n) :
         ∃! vid : Fin n, ValidatorIndex.isProposerFor vid slot := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Containers/Identifiers.lean as
+    --    `ValidatorIndex.unique_proposer` (∃! expanded: ∃ vid, P vid ∧ ∀ vid', P vid' → vid' = vid)
     ```
 
 - [ ] **VAL-4: Double-voting in the same slot is impossible**
