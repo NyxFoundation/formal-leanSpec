@@ -72,11 +72,11 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
 | FC | 0 | 5 | 0 | 5 |
-| VAL | 0 | 5 | 0 | 5 |
+| VAL | 1 | 4 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **14** | **16** | **1** | **31** |
+| **Total** | **15** | **15** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -348,14 +348,17 @@ A **Validator** is an entity that stakes ETH and participates in consensus. At e
 
 The propositions here guarantee **duty correctness and slashing prevention**: proposer selection is round-robin via `slot mod n`, with exactly one proposer per slot; the proposal key and attestation key are distinct (so key compromise stays local); no double-voting in the same slot (double voting is slashable); the stateful XMSS signing key never moves its used index backwards (key reuse leaks the secret key); and so on. These are the conditions for a validator to avoid penalties while letting the network advance safely. Implementations live in `LeanSpec/Validator/*`.
 
-- [ ] **VAL-1: Proposers are selected round-robin**
-  - Source: `proposer_index` (in `process_block_header`)
+- [x] **VAL-1: Proposers are selected round-robin**
+  - Source: `proposer_index` (in `process_block_header`; realized as `ValidatorIndex.proposer_for_slot` in `src/lean_spec/spec/forks/lstar/containers/identifiers.py`)
   - Note: Returns the proposer index for a given slot from the slot and the number of active validators `n` (round-robin).
-  - Sample code:
+  - Proved at: `LeanSpec/Forks/Lstar/Containers/Identifiers.lean` (`ValidatorIndex.proposer_index_round_robin`; `proposerForSlot_toNat` shows the `UInt64` construction never wraps). `processBlockHeader` consumes `proposerForSlot`, so the theorem speaks about the deployed selection.
+  - Sample code (`proposerFor` realized as `proposerForSlot` mirroring the Python name; `ValidatorIndex.mk` as `UInt64.ofNat`):
 
     ```lean
     theorem proposer_index_round_robin (slot : Slot) (n : Nat) (h : 0 < n) :
         ValidatorIndex.proposerFor slot n = ValidatorIndex.mk (slot.toNat % n) := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Containers/Identifiers.lean as
+    --    `ValidatorIndex.proposer_index_round_robin`
     ```
 
 - [ ] **VAL-2: Proposal key and attestation key are distinct**

@@ -59,6 +59,7 @@ exactly what reachability from genesis guarantees (ST-4's `Reachable`).
 -/
 
 import LeanSpec.Forks.Lstar.Config
+import LeanSpec.Forks.Lstar.Containers.Identifiers
 import LeanSpec.Forks.Lstar.Containers.State
 import LeanSpec.Forks.Lstar.Errors
 
@@ -154,9 +155,9 @@ def processBlockHeader (s : State) (b : Block) : ST.Result State :=
     .error .headerSlotNotNewer
   else if s.validators.size = 0 then
     .error .emptyValidatorRegistry
-  else if b.proposerIndex.toNat ≠ b.slot.toNat % s.validators.size then
+  else if b.proposerIndex ≠ ValidatorIndex.proposerForSlot b.slot s.validators.size then
     .error (.proposerMismatch
-      (UInt64.ofNat (b.slot.toNat % s.validators.size)) b.proposerIndex)
+      (ValidatorIndex.proposerForSlot b.slot s.validators.size) b.proposerIndex)
   else
     -- Genesis is justified and finalized by definition, so the first block
     -- forces its parent to both; later blocks keep their checkpoints.
