@@ -273,8 +273,9 @@ def maxChild (weights : Weights) : List Root → Option Root
     some (cs.foldl (fun best cand => if beats weights best cand then cand else best) c)
 
 /-- Greedy descent to the heaviest leaf (the `while` walk of
-`_compute_lmd_ghost_head`), on explicit fuel. -/
-private def ghostWalk (st : Store) (weights : Weights)
+`_compute_lmd_ghost_head`), on explicit fuel. Public so the descent
+lemmas (FC-2, `Store/Ancestry.lean`) can reason about each step. -/
+def ghostWalk (st : Store) (weights : Weights)
     (minScore : Option Nat) : Nat → Root → Root
   | 0, head => head
   | fuel + 1, head =>
