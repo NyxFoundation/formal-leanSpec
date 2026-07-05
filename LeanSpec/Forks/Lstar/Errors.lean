@@ -4,19 +4,26 @@ State-transition rejection errors.
 Mirrors `src/lean_spec/spec/forks/lstar/errors.py` in leanSpec, where
 `SpecRejectionError` carries a `RejectionReason`. The variants map to the
 reasons raised by the state-transition function:
-  - `slotNotInFuture`           ↔ `BLOCK_SLOT_NOT_IN_FUTURE`
-  - `invalidSlot`               ↔ `BLOCK_SLOT_MISMATCH`
-  - `headerSlotNotNewer`        ↔ `BLOCK_OLDER_THAN_LATEST_HEADER`
-  - `emptyValidatorRegistry`    ↔ `EMPTY_VALIDATOR_REGISTRY`
-  - `proposerMismatch`          ↔ `WRONG_PROPOSER`
-  - `parentRootMismatch`        ↔ `PARENT_ROOT_MISMATCH`
-  - `tooManyAttestationData`    ↔ `TOO_MANY_ATTESTATION_DATA`
-  - `emptyAggregationBits`      ↔ `EMPTY_AGGREGATION_BITS`
-  - `validatorIndexOutOfRange`  ↔ `VALIDATOR_INDEX_OUT_OF_RANGE`
-  - `justifiedSlotOutOfRange`   ↔ `JUSTIFIED_SLOT_OUT_OF_RANGE`
+  - `slotNotInFuture`                   ↔ `BLOCK_SLOT_NOT_IN_FUTURE`
+  - `invalidSlot`                       ↔ `BLOCK_SLOT_MISMATCH`
+  - `headerSlotNotNewer`                ↔ `BLOCK_OLDER_THAN_LATEST_HEADER`
+  - `emptyValidatorRegistry`            ↔ `EMPTY_VALIDATOR_REGISTRY`
+  - `proposerMismatch`                  ↔ `WRONG_PROPOSER`
+  - `parentRootMismatch`                ↔ `PARENT_ROOT_MISMATCH`
+  - `tooManyAttestationData`            ↔ `TOO_MANY_ATTESTATION_DATA`
+  - `emptyAggregationBits`              ↔ `EMPTY_AGGREGATION_BITS`
+  - `validatorIndexOutOfRange`          ↔ `VALIDATOR_INDEX_OUT_OF_RANGE`
+  - `justifiedSlotOutOfRange`           ↔ `JUSTIFIED_SLOT_OUT_OF_RANGE`
+  - `zeroHashJustificationRoot`         ↔ `ZERO_HASH_JUSTIFICATION_ROOT`
+  - `justificationVotesLengthMismatch`  ↔ `JUSTIFICATION_VOTES_LENGTH_MISMATCH`
 
 Python models failure by raising; Lean models it with `Except`, following
-the catalog samples (`State.processBlockHeader s b = .ok s'`).
+the catalog samples (`State.processBlockHeader s b = .ok s'`). Upstream
+leanEthereum/leanSpec#1180 made the same separation type-level in Python:
+`SpecRejectionError` now extends a dedicated `SpecError` base instead of
+`AssertionError`, so protocol rejections and internal assertions are
+distinguishable there too — matching what `Except STError` already
+expresses here.
 
 `parentRootMismatch` is pre-declared for the follow-up that widens the
 `process_block_header` validation surface (it needs `hash_tree_root`).
@@ -41,6 +48,8 @@ inductive STError where
   | emptyAggregationBits : STError
   | validatorIndexOutOfRange : STError
   | justifiedSlotOutOfRange (finalized target : Slot) : STError
+  | zeroHashJustificationRoot : STError
+  | justificationVotesLengthMismatch (expected actual : Nat) : STError
   deriving Repr, BEq, Inhabited
 
 /-- Result of a fallible state-transition step. -/
