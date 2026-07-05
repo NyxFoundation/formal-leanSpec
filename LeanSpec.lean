@@ -14,6 +14,7 @@ import LeanSpec.Forks.Lstar.Reachable
 import LeanSpec.Forks.Lstar.Slot
 import LeanSpec.Forks.Lstar.StateTransition
 import LeanSpec.Forks.Lstar.Store.Ancestry
+import LeanSpec.Forks.Lstar.Store.BlockProduction
 import LeanSpec.Forks.Lstar.Store.Store
 import LeanSpec.SSZ.Boolean
 import LeanSpec.SSZ.Bytes32
