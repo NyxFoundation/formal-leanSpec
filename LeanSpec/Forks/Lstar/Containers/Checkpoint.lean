@@ -31,7 +31,10 @@ namespace Checkpoint
 
 /-- The later of two checkpoints, keeping this one on a slot tie
 (`Checkpoint.advance_to`). The candidate replaces this checkpoint only when
-its slot is strictly higher, enforcing forward-only progression. -/
+its slot is strictly higher, enforcing forward-only progression. Selection
+is by slot only — it does not verify that the candidate's block descends
+from this one; for justified and finalized checkpoints that ancestry is a
+separate store invariant (leanEthereum/leanSpec#1179). -/
 def advanceTo (self candidate : Checkpoint) : Checkpoint :=
   if candidate.slot > self.slot then candidate else self
 
