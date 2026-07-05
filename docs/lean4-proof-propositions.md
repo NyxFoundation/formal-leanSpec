@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
-| FC | 4 | 1 | 0 | 5 |
+| FC | 5 | 0 | 0 | 5 |
 | VAL | 2 | 3 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **20** | **10** | **1** | **31** |
+| **Total** | **21** | **9** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -355,10 +355,17 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
     --    quantifies `∀ p ∈ st.blocks, ¬ Store.ProperAncestor st p.1 p.1`)
     ```
 
-- [ ] **FC-5: The block-production iteration terminates in finitely many steps**
-  - Source: `produce_block_with_signatures`
+- [x] **FC-5: The block-production iteration terminates in finitely many steps**
+  - Source: `produce_block_with_signatures` (realized as `build_block` in current leanSpec, `src/lean_spec/spec/forks/lstar/block_production.py`; candidate order and tie-breaks content-derived since leanEthereum/leanSpec#1181)
   - Note: Because attestations included in a new block can update the justified slot, the proposer iterates: "rebuild the block based on the current justified → if justified moves, rebuild again". The proposition asserts that this iteration terminates in finitely many rounds (i.e. reaches a fixed point) thanks to the monotone non-decreasing nature of the justified slot together with an upper bound.
+  - Proved at: `LeanSpec/Forks/Lstar/Store/BlockProduction.lean`. Termination is witnessed by `BlockProduction.selectionLoop`, defined by well-founded recursion on the unprocessed candidate count with **no fuel** — the decreasing measure (`selectionPass_rest_lt`: a pass that accepted something strictly shrinks the remainder) is exactly upstream's "the chosen set only grows, and is bounded". The explicit finite-rounds statement is `build_block_selection_terminates`: at most `payloads.length + 1` passes, for any coverage picker (`select_proofs_for_coverage` is a parameter — its choices never steer the loop's control flow).
   - Sample code: expressed via `WellFoundedRecursion`. High difficulty.
+
+    ```lean
+    -- ✅ realized in LeanSpec/Forks/Lstar/Store/BlockProduction.lean:
+    --    `selectionLoop` (well-founded recursion, no fuel) and
+    --    `build_block_selection_terminates` (pass count ≤ candidates + 1)
+    ```
 
 ## Validator
 
