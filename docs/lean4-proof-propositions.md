@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
-| FC | 3 | 2 | 0 | 5 |
+| FC | 4 | 1 | 0 | 5 |
 | VAL | 2 | 3 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **19** | **11** | **1** | **31** |
+| **Total** | **20** | **10** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -323,9 +323,10 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
     --    `(Store.updateHead st).head` under `Store.WellFormed`)
     ```
 
-- [ ] **FC-3: An attestation's source / target / head are slot-ordered**
-  - Source: `validate_attestation`
-  - Note: Validates the consistency of an attestation (slot ordering, existence of referenced blocks, etc.).
+- [x] **FC-3: An attestation's source / target / head are slot-ordered**
+  - Source: `validate_attestation` (`src/lean_spec/spec/forks/lstar/fork_choice.py`; since leanEthereum/leanSpec#1179 it also rejects heads off the finalized subtree — `HEAD_NOT_DESCENDANT_OF_FINALIZED` — closing the vote-resurrection gap of issue #1176 M-2)
+  - Note: Validates the consistency of an attestation (slot ordering, existence of referenced blocks, checkpoint-block slot consistency, ancestry, head observability, clock-skew admission horizon).
+  - Proved at: `LeanSpec/Forks/Lstar/Store/Store.lean` (`Store.attestation_topology`, from the topology checks of `Store.validateAttestation`)
   - Sample code:
 
     ```lean
@@ -334,6 +335,10 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
         (h : Store.validateAttestation st att = .ok) :
         att.data.source.slot ≤ att.data.target.slot ∧
         att.data.target.slot ≤ att.data.head.slot := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Store/Store.lean as
+    --    `Store.attestation_topology` (mirroring upstream, the modeled
+    --    function takes the `AttestationData` directly and returns
+    --    `.ok ()`)
     ```
 
 - [x] **FC-4: The fork-choice tree is acyclic**

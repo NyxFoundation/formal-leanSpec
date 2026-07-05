@@ -3,7 +3,8 @@ State-transition rejection errors.
 
 Mirrors `src/lean_spec/spec/forks/lstar/errors.py` in leanSpec, where
 `SpecRejectionError` carries a `RejectionReason`. The variants map to the
-reasons raised by the state-transition function:
+reasons raised by the modeled spec surface — the state-transition
+function and fork-choice attestation validation:
   - `slotNotInFuture`                   ↔ `BLOCK_SLOT_NOT_IN_FUTURE`
   - `invalidSlot`                       ↔ `BLOCK_SLOT_MISMATCH`
   - `headerSlotNotNewer`                ↔ `BLOCK_OLDER_THAN_LATEST_HEADER`
@@ -16,6 +17,24 @@ reasons raised by the state-transition function:
   - `justifiedSlotOutOfRange`           ↔ `JUSTIFIED_SLOT_OUT_OF_RANGE`
   - `zeroHashJustificationRoot`         ↔ `ZERO_HASH_JUSTIFICATION_ROOT`
   - `justificationVotesLengthMismatch`  ↔ `JUSTIFICATION_VOTES_LENGTH_MISMATCH`
+  - `unknownSourceBlock`                ↔ `UNKNOWN_SOURCE_BLOCK`
+  - `unknownTargetBlock`                ↔ `UNKNOWN_TARGET_BLOCK`
+  - `unknownHeadBlock`                  ↔ `UNKNOWN_HEAD_BLOCK`
+  - `sourceAfterTarget`                 ↔ `SOURCE_AFTER_TARGET`
+  - `headOlderThanTarget`               ↔ `HEAD_OLDER_THAN_TARGET`
+  - `sourceSlotMismatch`                ↔ `SOURCE_SLOT_MISMATCH`
+  - `targetSlotMismatch`                ↔ `TARGET_SLOT_MISMATCH`
+  - `headSlotMismatch`                  ↔ `HEAD_SLOT_MISMATCH`
+  - `sourceNotAncestorOfTarget`         ↔ `SOURCE_NOT_ANCESTOR_OF_TARGET`
+  - `targetNotAncestorOfHead`           ↔ `TARGET_NOT_ANCESTOR_OF_HEAD`
+  - `headNotDescendantOfFinalized`      ↔ `HEAD_NOT_DESCENDANT_OF_FINALIZED`
+                                          (leanEthereum/leanSpec#1179)
+  - `attestationSlotBeforeHead`         ↔ `ATTESTATION_SLOT_BEFORE_HEAD`
+  - `attestationTooFarInFuture`         ↔ `ATTESTATION_TOO_FAR_IN_FUTURE`
+
+The `STError` name is historical — the state-transition function was
+modeled first; the type now carries every modeled rejection reason, like
+upstream's single `RejectionReason` enum.
 
 Python models failure by raising; Lean models it with `Except`, following
 the catalog samples (`State.processBlockHeader s b = .ok s'`). Upstream
@@ -50,6 +69,19 @@ inductive STError where
   | justifiedSlotOutOfRange (finalized target : Slot) : STError
   | zeroHashJustificationRoot : STError
   | justificationVotesLengthMismatch (expected actual : Nat) : STError
+  | unknownSourceBlock (root : Root) : STError
+  | unknownTargetBlock (root : Root) : STError
+  | unknownHeadBlock (root : Root) : STError
+  | sourceAfterTarget (source target : Slot) : STError
+  | headOlderThanTarget (head target : Slot) : STError
+  | sourceSlotMismatch (expected actual : Slot) : STError
+  | targetSlotMismatch (expected actual : Slot) : STError
+  | headSlotMismatch (expected actual : Slot) : STError
+  | sourceNotAncestorOfTarget : STError
+  | targetNotAncestorOfHead : STError
+  | headNotDescendantOfFinalized : STError
+  | attestationSlotBeforeHead (slot head : Slot) : STError
+  | attestationTooFarInFuture (slot maxAdmissible : Nat) : STError
   deriving Repr, BEq, Inhabited
 
 /-- Result of a fallible state-transition step. -/

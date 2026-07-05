@@ -17,6 +17,11 @@ in leanSpec (post leanEthereum/leanSpec#1179/#1181):
   - `_compute_lmd_ghost_head(store, start_root, attestations, min_score)`.
   - `update_head(store)` — the upstream successor of the catalog's
     `compute_head`.
+  - `validate_attestation(store, attestation_data)` — availability, slot
+    topology, checkpoint-block consistency, ancestry (including the
+    descent of the head from the finalized block added by
+    leanEthereum/leanSpec#1179 against vote resurrection), head
+    observability, and the clock-skew admission horizon.
 
 Divergences from Python, documented per function:
   - Python `dict`s are association lists (`List (key × value)`); dict-key
@@ -37,17 +42,20 @@ Divergences from Python, documented per function:
     missing head state keeps the previous `latest_finalized`
     (`update_head`'s `store.states[new_head]` lookup; the M-4
     blocks-states alignment of leanEthereum/leanSpec#1176).
-  - `create_store`, `on_block`, `on_gossip_*`, `validate_attestation`,
+  - `create_store`, `on_block`, `on_gossip_*`,
     `prune_stale_attestation_data`, `accept_new_attestations`, and
-    `update_safe_target` are follow-up work (FC-2..FC-5, STOR-*).
+    `update_safe_target` are follow-up work (FC-5, STOR-*).
 
-Proves FC-1 from `docs/lean4-proof-propositions.md`:
+Proves FC-1 and FC-3 from `docs/lean4-proof-propositions.md`:
   - FC-1: head selection is deterministic — `updateHead` is a pure total
     function of the store (`update_head_deterministic`). Totality is by
     construction (every walk is fuel-bounded), and
     `computeLmdGhostHead_in_store` / `updateHead_head_in_store` give the
     substantive well-definedness: the selected head is the anchor or a
     block the store knows.
+  - FC-3: a successfully validated attestation is slot-ordered —
+    `source.slot ≤ target.slot ≤ head.slot` (`attestation_topology`,
+    from the topology checks of `validateAttestation`).
 
 `Store.WellFormed` states the store invariants extracted in
 leanEthereum/leanSpec#1176 (documented and partially enforced upstream by
@@ -154,6 +162,92 @@ def checkpointIsAncestor (st : Store) (ancestor descendant : Checkpoint) :
     Bool :=
   if descendant.slot < ancestor.slot then false
   else ancestorWalk st ancestor (st.blocks.length + 1) descendant.root
+
+/-! ## Attestation validation (`validate_attestation`) -/
+
+/-- Validate an incoming attestation before processing
+(`validate_attestation`): the vote must respect the basic laws of time
+and topology. Checks, in upstream order — availability of the three
+referenced blocks; slot topology (`source ≤ target ≤ head`, the second
+check giving `head ≥ source` by transitivity); checkpoint slots matching
+the referenced blocks; ancestry along the chain, including the descent
+of the head from the finalized block (leanEthereum/leanSpec#1179, so a
+stale vote cannot re-enter after pruning drops it); head observability
+(a vote cannot predate its head); and the clock-skew admission horizon
+(one gossip-disparity interval, in slot units — Python works in `int` to
+dodge the `2^64` interval overflow, mirrored here by `Nat`). -/
+def validateAttestation (st : Store) (data : AttestationData) :
+    ST.Result Unit :=
+  let source := data.source
+  let target := data.target
+  let head := data.head
+  -- Availability: a vote counts only if the blocks involved are known.
+  match st.getBlock? source.root with
+  | none => .error (.unknownSourceBlock source.root)
+  | some sourceBlock =>
+  match st.getBlock? target.root with
+  | none => .error (.unknownTargetBlock target.root)
+  | some targetBlock =>
+  match st.getBlock? head.root with
+  | none => .error (.unknownHeadBlock head.root)
+  | some headBlock =>
+  -- Topology: history is linear and monotonic, source ≤ target ≤ head.
+  if target.slot < source.slot then
+    .error (.sourceAfterTarget source.slot target.slot)
+  else if head.slot < target.slot then
+    .error (.headOlderThanTarget head.slot target.slot)
+  -- Consistency: checkpoint slots match the referenced blocks.
+  else if sourceBlock.slot ≠ source.slot then
+    .error (.sourceSlotMismatch source.slot sourceBlock.slot)
+  else if targetBlock.slot ≠ target.slot then
+    .error (.targetSlotMismatch target.slot targetBlock.slot)
+  else if headBlock.slot ≠ head.slot then
+    .error (.headSlotMismatch head.slot headBlock.slot)
+  -- Ancestry: fork-choice weight accrues to every ancestor of the head.
+  else if !(checkpointIsAncestor st source target) then
+    .error .sourceNotAncestorOfTarget
+  else if !(checkpointIsAncestor st target head) then
+    .error .targetNotAncestorOfHead
+  -- Fork choice only ever descends from the finalized block (#1179).
+  else if !(checkpointIsAncestor st st.latestFinalized head) then
+    .error .headNotDescendantOfFinalized
+  -- Head consistency: a vote cannot have observed a head that did not
+  -- exist yet.
+  else if data.slot < head.slot then
+    .error (.attestationSlotBeforeHead data.slot head.slot)
+  else
+    -- Time: reject votes whose slot has not started, with a one-interval
+    -- clock-skew margin, computed in slot units.
+    let admissionHorizonInterval := st.time.toNat + GOSSIP_DISPARITY_INTERVALS
+    let maxAdmissibleSlot := admissionHorizonInterval / INTERVALS_PER_SLOT
+    if maxAdmissibleSlot < data.slot.toNat then
+      .error (.attestationTooFarInFuture data.slot.toNat maxAdmissibleSlot)
+    else
+      .ok ()
+
+/-- FC-3: a successfully validated attestation is slot-ordered — its
+source does not exceed its target and its target does not exceed its
+head (`head ≥ source` then follows by transitivity). Extracted from the
+topology checks of `validateAttestation`. -/
+theorem attestation_topology (st : Store) (data : AttestationData)
+    (h : validateAttestation st data = .ok ()) :
+    data.source.slot ≤ data.target.slot ∧
+    data.target.slot ≤ data.head.slot := by
+  unfold validateAttestation at h
+  dsimp only at h
+  split at h
+  · simp at h
+  · split at h
+    · simp at h
+    · split at h
+      · simp at h
+      · split at h
+        · simp at h
+        · next hst =>
+          split at h
+          · simp at h
+          · next hth =>
+            exact ⟨UInt64.not_lt.mp hst, UInt64.not_lt.mp hth⟩
 
 /-! ## Vote weights -/
 
