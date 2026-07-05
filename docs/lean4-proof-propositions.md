@@ -1,6 +1,6 @@
 ---
 title: leanSpec → Lean4 Theorem Proving Proposition Catalog
-last_updated: 2026-07-03
+last_updated: 2026-07-05
 tags:
   - lean4
   - formal-verification
@@ -184,8 +184,8 @@ A **Container** is a composite SSZ type — a struct with named fields (analogou
 
 - [x] **CONT-2: justifiable holds iff the slot distance is one of three forms**
   - Source: `is_justifiable_after` (`src/lean_spec/spec/forks/lstar/slot.py`)
-  - Note: Decides whether the target slot is at a justifiable distance from the finalized-checkpoint slot (LMD-CASPER justification-candidate check).
-  - Proved at: `LeanSpec/Forks/Lstar/Slot.lean` (`Slot.justifiable_iff`, via correctness of the hand-rolled `isqrt`: `isqrt_le` / `isqrt_lt_succ` / `isqrt_eq`)
+  - Note: Decides whether the target slot is at a justifiable distance from the finalized-checkpoint slot (LMD-CASPER justification-candidate check). Total since leanEthereum/leanSpec#1178: a slot before the finalized boundary returns `False` (previously an `assert` crash); the guard is proved as `Slot.justifiable_before_finalized`.
+  - Proved at: `LeanSpec/Forks/Lstar/Slot.lean` (`Slot.justifiable_iff`, via correctness of the hand-rolled `isqrt`: `isqrt_le` / `isqrt_lt_succ` / `isqrt_eq`; the settled-slot guard as `Slot.justifiable_before_finalized`)
   - Sample code:
 
     ```lean

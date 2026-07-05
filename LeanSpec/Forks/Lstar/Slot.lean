@@ -3,23 +3,27 @@ Slot justifiability judgments (3SF-mini).
 
 Mirrors `src/lean_spec/spec/forks/lstar/slot.py` in leanSpec:
   - `IMMEDIATE_JUSTIFICATION_WINDOW = 5`
-  - `Slot.is_justifiable_after(finalized_slot)`: a slot is a justification
-    candidate iff its distance δ from the last finalized slot satisfies
-    δ ≤ 5, δ is a perfect square, or δ is pronic (`n(n+1)`, detected via
-    `4δ + 1` being an odd perfect square).
+  - `Slot.is_justifiable_after(finalized_slot)`: a slot before the
+    finalized boundary is already settled and never a candidate; past it,
+    a slot is a justification candidate iff its distance δ from the last
+    finalized slot satisfies δ ≤ 5, δ is a perfect square, or δ is pronic
+    (`n(n+1)`, detected via `4δ + 1` being an odd perfect square).
   - `Slot.justified_index_after(finalized_slot)`: relative bitfield index
     for justification tracking; `none` at or before the finalized boundary.
 
 Python states both as methods on the candidate slot; the catalog (CONT-2)
-uses the argument order `(finalized, target)`, adopted here. Python asserts
-`target ≥ finalized` in `is_justifiable_after`; in Lean the `Nat`
-subtraction truncates instead — callers guarantee the precondition, as
-upstream's assert documents.
+uses the argument order `(finalized, target)`, adopted here.
+`is_justifiable_after` is total since leanEthereum/leanSpec#1178
+(previously it asserted `target ≥ finalized`): a slot below the finalized
+boundary returns `False` instead of raising. `isJustifiableAfter` carries
+the same guard, proved as `justifiable_before_finalized`.
 
 Proves CONT-2 from `docs/lean4-proof-propositions.md`:
-  - CONT-2: `Slot.isJustifiableAfter finalized target` holds iff the slot
-    distance is at most 5, a perfect square, or a pronic number
-    (`justifiable_iff`), via correctness of the hand-rolled `isqrt`.
+  - CONT-2: past the finalized boundary, `Slot.isJustifiableAfter
+    finalized target` holds iff the slot distance is at most 5, a perfect
+    square, or a pronic number (`justifiable_iff`), via correctness of the
+    hand-rolled `isqrt`; below the boundary it is `false`
+    (`justifiable_before_finalized`).
 
 Also supports the ST-* propositions (the executable judgments are consumed
 by `process_attestations`).
@@ -55,9 +59,11 @@ def justifiableDelta (delta : Nat) : Bool :=
    root * root == discriminant && root % 2 == 1)
 
 /-- Whether `target` is a valid justification candidate after `finalized`
-(`is_justifiable_after`). -/
+(`is_justifiable_after`). A slot before the finalized boundary is already
+settled, never a future candidate. -/
 def isJustifiableAfter (finalized target : Slot) : Bool :=
-  justifiableDelta (target.toNat - finalized.toNat)
+  if target < finalized then false
+  else justifiableDelta (target.toNat - finalized.toNat)
 
 /-- Relative bitfield index of `target` for justification tracking
 (`justified_index_after`). Slots at or before the finalized boundary are
@@ -190,15 +196,26 @@ theorem justifiableDelta_iff (δ : Nat) :
       · rw [hr]
         omega
 
-/-- CONT-2: `is_justifiable_after` holds iff the slot distance from the
-finalized slot is at most 5, a perfect square, or a pronic number. The
-`finalized ≤ target` hypothesis mirrors upstream's assert; the
-characterization itself holds for the truncated distance regardless. -/
+/-- CONT-2: past the finalized boundary, `is_justifiable_after` holds iff
+the slot distance from the finalized slot is at most 5, a perfect square,
+or a pronic number. The `finalized ≤ target` hypothesis discharges the
+settled-slot guard. -/
 theorem justifiable_iff
-    (finalized target : Slot) (_h : finalized ≤ target) :
+    (finalized target : Slot) (h : finalized ≤ target) :
     isJustifiableAfter finalized target ↔
       (let δ := target.toNat - finalized.toNat
-       δ ≤ 5 ∨ (∃ k, δ = k * k) ∨ (∃ k, δ = k * (k + 1))) :=
-  justifiableDelta_iff (target.toNat - finalized.toNat)
+       δ ≤ 5 ∨ (∃ k, δ = k * k) ∨ (∃ k, δ = k * (k + 1))) := by
+  unfold isJustifiableAfter
+  rw [if_neg (UInt64.not_lt.mpr h)]
+  exact justifiableDelta_iff (target.toNat - finalized.toNat)
+
+/-- A slot strictly before the finalized boundary is never a justification
+candidate — the settled-slot guard `is_justifiable_after` gained in
+leanEthereum/leanSpec#1178 (previously an `assert` crash). -/
+theorem justifiable_before_finalized
+    (finalized target : Slot) (h : target < finalized) :
+    isJustifiableAfter finalized target = false := by
+  unfold isJustifiableAfter
+  rw [if_pos h]
 
 end LeanSpec.Slot
