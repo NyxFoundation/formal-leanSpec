@@ -72,11 +72,11 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
 | FC | 5 | 0 | 0 | 5 |
-| VAL | 2 | 3 | 0 | 5 |
+| VAL | 3 | 2 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **21** | **9** | **1** | **31** |
+| **Total** | **22** | **8** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -409,9 +409,10 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
     --    `ValidatorIndex.unique_proposer` (∃! expanded: ∃ vid, P vid ∧ ∀ vid', P vid' → vid' = vid)
     ```
 
-- [ ] **VAL-4: Double-voting in the same slot is impossible**
-  - Source: `ValidatorService.produce_attestation`
-  - Note: Checks the local history for "already attested in this slot"; produces a new attestation only if not yet voted (fails when it would be a double vote).
+- [x] **VAL-4: Double-voting in the same slot is impossible**
+  - Source: `ValidatorService.produce_attestation` (realized as the attestation arm of `ValidatorService.run` in `src/lean_spec/node/validator/service.py`: the duty gate over the service-wide `_attested_slots` set)
+  - Note: Checks the local history for "already attested in this slot"; produces a new attestation only if not yet voted. Upstream tracks attested slots per service — one attestation pass covers every validator the node manages — and the gate silently skips rather than failing, retrying gated slots on later passes; modeled as `attestationDutyStep = none`.
+  - Proved at: `LeanSpec/Validator/Service.lean` (`ValidatorService.no_double_vote`; `attested_after_duty` shows a fired duty records its slot through the retention prune, and `no_double_vote_after` sharpens VAL-4 to "once fired, never again for that slot")
   - Sample code:
 
     ```lean
@@ -420,6 +421,10 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
         (hin : slot ∈ svc.attestedSlots vid)
         (h : ValidatorService.produceAttestation svc vid slot = .ok svc') :
         False := by sorry
+    -- ✅ proved in LeanSpec/Validator/Service.lean as
+    --    `ValidatorService.no_double_vote` (the attested set is
+    --    service-wide upstream, not per validator, and the gate skips
+    --    instead of erroring: `attestationDutyStep ... = none`)
     ```
 
 - [ ] **VAL-5: XMSS preparation state is monotonically increasing**
