@@ -28,6 +28,21 @@ instance : Inhabited Bytes32 := ⟨zero⟩
 
 instance : BEq Bytes32 := ⟨fun a b => a.val.data == b.val.data⟩
 
+/-- `==` on `Bytes32` agrees with propositional equality (needed wherever
+`Bytes32` keys an association-list map, e.g. the fork-choice store). -/
+instance : LawfulBEq Bytes32 where
+  eq_of_beq {a b} h := by
+    have hd : a.val.data = b.val.data := eq_of_beq h
+    have hv : a.val = b.val := by
+      obtain ⟨⟨ad⟩, ha⟩ := a
+      obtain ⟨⟨bd⟩, hb⟩ := b
+      cases hd
+      rfl
+    exact Subtype.ext hv
+  rfl {a} := by
+    show (a.val.data == a.val.data) = true
+    exact beq_self_eq_true _
+
 instance : Repr Bytes32 := ⟨fun b n => reprPrec b.val.data n⟩
 
 end Bytes32
