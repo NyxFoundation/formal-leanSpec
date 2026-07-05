@@ -28,10 +28,17 @@ Divergences from Python, documented per function:
     `hash_tree_root(parent_header)` (history append, genesis anchoring),
     the block's `parent_root` is used instead — upstream verifies the two
     are equal before using them interchangeably.
-  - Python `assert`s (internal invariants, not spec rejections) are not
-    modeled: the zero-hash check on `justifications_roots`, the strict-zip
-    length check, and the root-presence check before pruning (a missing
-    root simply drops the entry).
+  - leanEthereum/leanSpec#1178 turned the `process_attestations` vote-layout
+    checks from `assert`s into typed rejections, and they are modeled here:
+    an empty registry (`EMPTY_VALIDATOR_REGISTRY`), a flat vote list whose
+    length is not roots × validators
+    (`JUSTIFICATION_VOTES_LENGTH_MISMATCH`), and a zero-hash tracked root
+    (`ZERO_HASH_JUSTIFICATION_ROOT`). Pruning after finalization drops a
+    tally whose root is missing from the slot map — upstream behavior since
+    the same PR. The one remaining Python `assert` (the
+    `justified_index_after` result of a non-justified target is never
+    `None`) guards an internal invariant, modeled by matching on the
+    `Option` instead.
   - The vote map `dict[Bytes32, list[Boolean]]` is an association list;
     the final re-pack sorts roots bytewise-lexicographically, matching
     Python's `sorted` on `bytes`.
@@ -251,10 +258,14 @@ def rootToSlot (hist : Array Root) (start : Nat) (r : Root) : Option Nat :=
     none
 
 /-- No justifiable slot sits strictly between `src` and `tgt` relative to
-the `finalized` boundary (the 3SF-mini finalization condition). -/
+the `finalized` boundary (the 3SF-mini finalization condition). Carries the
+settled-slot guard of `is_justifiable_after` (leanEthereum/leanSpec#1178);
+at the call site every slot checked lies past `finalized`, so the guard
+never fires there. -/
 def noJustifiableBetween (finalized src tgt : Nat) : Bool :=
   (List.range (tgt - src - 1)).all fun k =>
-    !(Slot.justifiableDelta (src + 1 + k - finalized))
+    let s := src + 1 + k
+    !(if s < finalized then false else Slot.justifiableDelta (s - finalized))
 
 /-- Advance justification (and possibly finalization) for a target that
 reached the 2/3 supermajority: move `latestJustified` forward only, mark
@@ -344,30 +355,46 @@ def processAttestations (s : State)
     .error (.tooManyAttestationData distinct.length MAX_ATTESTATIONS_DATA)
   else
     let validatorCount := s.validators.size
-    let init : JFAcc := {
-      justifications :=
-        unpackJustifications s.justificationsRoots s.justificationsValidators
-          validatorCount
-      latestJustified := s.latestJustified
-      latestFinalized := s.latestFinalized
-      justifiedSlots := s.justifiedSlots }
-    let rootSlot :=
-      rootToSlot s.historicalBlockHashes (s.latestFinalized.slot.toNat + 1)
-    match attestations.foldlM
-        (processAttestation validatorCount s.historicalBlockHashes rootSlot)
-        init with
-    | .error e => .error e
-    | .ok acc =>
-      -- Re-pack the vote map into the flat SSZ layout, roots sorted for a
-      -- deterministic representation across nodes.
-      let sortedRoots := (acc.justifications.map (·.1)).mergeSort Root.lexLe
-      .ok { s with
-        latestJustified := acc.latestJustified
-        latestFinalized := acc.latestFinalized
-        justifiedSlots := acc.justifiedSlots
-        justificationsRoots := sortedRoots.toArray
-        justificationsValidators := sortedRoots.foldl
-          (fun a r => a ++ ((lookupVotes acc.justifications r).getD #[])) #[] }
+    -- An empty registry leaves no segment width, so the flat vote layout
+    -- cannot be recovered (the header stage already guards this).
+    if validatorCount = 0 then
+      .error .emptyValidatorRegistry
+    -- The flat vote list must hold exactly one full validator segment per
+    -- tracked root, or the segments no longer line up with the roots.
+    else if s.justificationsValidators.size ≠
+        s.justificationsRoots.size * validatorCount then
+      .error (.justificationVotesLengthMismatch
+        (s.justificationsRoots.size * validatorCount)
+        s.justificationsValidators.size)
+    -- The zero hash marks a skipped slot, never a real block, so it cannot
+    -- track votes.
+    else if s.justificationsRoots.any (· == SSZ.Bytes32.zero) then
+      .error .zeroHashJustificationRoot
+    else
+      let init : JFAcc := {
+        justifications :=
+          unpackJustifications s.justificationsRoots s.justificationsValidators
+            validatorCount
+        latestJustified := s.latestJustified
+        latestFinalized := s.latestFinalized
+        justifiedSlots := s.justifiedSlots }
+      let rootSlot :=
+        rootToSlot s.historicalBlockHashes (s.latestFinalized.slot.toNat + 1)
+      match attestations.foldlM
+          (processAttestation validatorCount s.historicalBlockHashes rootSlot)
+          init with
+      | .error e => .error e
+      | .ok acc =>
+        -- Re-pack the vote map into the flat SSZ layout, roots sorted for a
+        -- deterministic representation across nodes.
+        let sortedRoots := (acc.justifications.map (·.1)).mergeSort Root.lexLe
+        .ok { s with
+          latestJustified := acc.latestJustified
+          latestFinalized := acc.latestFinalized
+          justifiedSlots := acc.justifiedSlots
+          justificationsRoots := sortedRoots.toArray
+          justificationsValidators := sortedRoots.foldl
+            (fun a r => a ++ ((lookupVotes acc.justifications r).getD #[])) #[] }
 
 /-- Apply full block processing including header and body
 (`process_block`). -/
@@ -528,10 +555,16 @@ theorem processAttestations_mono (s s' : State)
   · simp at h
   · split at h
     · simp at h
-    · next acc heq =>
-      injection h with h'
-      subst h'
-      exact foldlM_processAttestation_mono _ _ _ atts _ acc heq
+    · split at h
+      · simp at h
+      · split at h
+        · simp at h
+        · split at h
+          · simp at h
+          · next acc heq =>
+            injection h with h'
+            subst h'
+            exact foldlM_processAttestation_mono _ _ _ atts _ acc heq
 
 /-- `processBlockHeader` never decreases either checkpoint slot on an
 anchor-well-formed state: the genesis anchor overwrites slot-0 checkpoints
@@ -714,10 +747,16 @@ theorem processAttestations_jf (s s' : State)
   · simp at h
   · split at h
     · simp at h
-    · next acc heq =>
-      injection h with h'
-      subst h'
-      exact foldlM_processAttestation_jf _ _ _ atts _ acc heq hj
+    · split at h
+      · simp at h
+      · split at h
+        · simp at h
+        · split at h
+          · simp at h
+          · next acc heq =>
+            injection h with h'
+            subst h'
+            exact foldlM_processAttestation_jf _ _ _ atts _ acc heq hj
 
 /-- `processAttestations` never touches the latest block header. -/
 theorem processAttestations_header (s s' : State)
@@ -730,9 +769,15 @@ theorem processAttestations_header (s s' : State)
   · simp at h
   · split at h
     · simp at h
-    · injection h with h'
-      subst h'
-      rfl
+    · split at h
+      · simp at h
+      · split at h
+        · simp at h
+        · split at h
+          · simp at h
+          · injection h with h'
+            subst h'
+            rfl
 
 /-- `processBlockHeader` preserves `finalized ≤ justified`: the genesis
 anchor sets both checkpoints to slot 0, and every later block keeps them. -/
