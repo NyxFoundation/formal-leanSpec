@@ -21,4 +21,9 @@ def MAX_ATTESTATIONS_DATA : Nat := 8
 (`INTERVALS_PER_SLOT`, a `Uint64` upstream). -/
 def INTERVALS_PER_SLOT : Nat := 5
 
+/-- Clock-skew margin for gossip admission, in intervals — one interval,
+deliberately not a whole slot (`GOSSIP_DISPARITY_INTERVALS`, a `Uint64`
+upstream). -/
+def GOSSIP_DISPARITY_INTERVALS : Nat := 1
+
 end LeanSpec.Forks.Lstar
