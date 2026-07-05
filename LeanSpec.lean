@@ -22,3 +22,4 @@ import LeanSpec.SSZ.Hash
 import LeanSpec.SSZ.Uint64
 import LeanSpec.SSZ.Utils
 import LeanSpec.SSZ.Vector
+import LeanSpec.Validator.Service
