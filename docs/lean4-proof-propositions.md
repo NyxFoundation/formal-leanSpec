@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
-| FC | 2 | 3 | 0 | 5 |
+| FC | 3 | 2 | 0 | 5 |
 | VAL | 2 | 3 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **18** | **12** | **1** | **31** |
+| **Total** | **19** | **11** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -308,15 +308,19 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
     --    `Store.updateHead_head_in_store`)
     ```
 
-- [ ] **FC-2: The head descends from the latest justified checkpoint**
-  - Source: `compute_head` (derived property; same function as FC-1)
-  - Note: Confirm that the head is a descendant of justified using the helper `isAncestorOrEqual` (decides whether `a` is an ancestor of, or equal to, `b`).
+- [x] **FC-2: The head descends from the latest justified checkpoint**
+  - Source: `compute_head` (derived property; same function as FC-1 — upstream `update_head` / `_compute_lmd_ghost_head`)
+  - Note: Confirm that the head is a descendant of justified using the helper `isAncestorOrEqual` (decides whether `a` is an ancestor of, or equal to, `b`). Modeled relationally as `Store.AncestorOrEqual` (`a = d ∨ ProperAncestor st a d`), like FC-4's `ProperAncestor`.
+  - Proved at: `LeanSpec/Forks/Lstar/Store/Ancestry.lean` (`Store.head_descends_from_justified`, via `Store.ghostWalk_ancestorOrEqual` — every walk step moves to a stored child — and `Store.computeLmdGhostHead_descends`; `ProperAncestor.trans` composes the steps)
   - Sample code:
 
     ```lean
     theorem head_descends_from_justified (st : Store) (h : Bytes32)
         (hh : Store.computeHead st = h) :
         Store.isAncestorOrEqual st st.latestJustified.root h := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Store/Ancestry.lean as
+    --    `Store.head_descends_from_justified` (stated directly on
+    --    `(Store.updateHead st).head` under `Store.WellFormed`)
     ```
 
 - [ ] **FC-3: An attestation's source / target / head are slot-ordered**
