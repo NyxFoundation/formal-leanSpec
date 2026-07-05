@@ -17,4 +17,8 @@ namespace LeanSpec.Forks.Lstar
 (`MAX_ATTESTATIONS_DATA`, a `Uint8` upstream). -/
 def MAX_ATTESTATIONS_DATA : Nat := 8
 
+/-- Number of validator-duty intervals per slot
+(`INTERVALS_PER_SLOT`, a `Uint64` upstream). -/
+def INTERVALS_PER_SLOT : Nat := 5
+
 end LeanSpec.Forks.Lstar

@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
-| FC | 0 | 5 | 0 | 5 |
+| FC | 1 | 4 | 0 | 5 |
 | VAL | 2 | 3 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **16** | **14** | **1** | **31** |
+| **Total** | **17** | **13** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -290,17 +290,22 @@ The propositions here guarantee that **the STF advances state as expected**: aft
 
 **Fork choice** is the algorithm that decides which branch is the canonical chain when multiple valid block candidates exist. Lean Ethereum (lstar) is **LMD-GHOST**-based: it tallies the weight of the latest attestations and selects the heaviest branch downstream of the justified checkpoint as the head. The `Store` is the state holding fork-choice inputs — the block set, the attestation cache, and the latest justified/finalized checkpoints.
 
-The propositions here guarantee **fork-choice consistency**: `compute_head` is deterministic for the same Store; the chosen head is always a descendant of `latest_justified`; the topological constraint `source.slot ≤ target.slot ≤ head.slot` on attestations; the block-relation graph is acyclic (no cycles in the `parent_root` chain); and the block-production loop terminates in finitely many steps. If these break, the head becomes ill-defined and the network splits. Implementations live in `LeanSpec/Forks/Lstar/Store/*`.
+The propositions here guarantee **fork-choice consistency**: `compute_head` is deterministic for the same Store; the chosen head is always a descendant of `latest_justified`; the topological constraint `source.slot ≤ target.slot ≤ head.slot` on attestations; the block-relation graph is acyclic (no cycles in the `parent_root` chain); and the block-production loop terminates in finitely many steps. If these break, the head becomes ill-defined and the network splits. Implementations live in `LeanSpec/Forks/Lstar/Store/*`. The store invariants these proofs assume are the ones extracted in leanEthereum/leanSpec#1176 (documented and partially enforced upstream by #1179), stated as `Store.WellFormed`.
 
-- [ ] **FC-1: Head selection is deterministic (a pure function)**
-  - Source: `compute_head`
+- [x] **FC-1: Head selection is deterministic (a pure function)**
+  - Source: `compute_head` (renamed upstream: `update_head`, driving `_compute_lmd_ghost_head`, `src/lean_spec/spec/forks/lstar/fork_choice.py`; vote tie-breaks are insertion-order independent since leanEthereum/leanSpec#1181)
   - Note: Computes the canonical head root from the Store using LMD-GHOST.
+  - Proved at: `LeanSpec/Forks/Lstar/Store/Store.lean` (`Store.update_head_deterministic`; well-definedness as `Store.computeLmdGhostHead_in_store` / `Store.updateHead_head_in_store` — the selected head is the justified anchor or a stored block — with totality by fuel-bounded construction)
   - Sample code:
 
     ```lean
     theorem compute_head_deterministic (st : Store) :
         Store.computeHead st = Store.computeHead st := by rfl
     -- In practice: expand into a separate lemma proving well-formedness as a pure function.
+    -- ✅ proved in LeanSpec/Forks/Lstar/Store/Store.lean as
+    --    `Store.update_head_deterministic` (upstream renamed `compute_head` →
+    --    `update_head`; substance in `Store.computeLmdGhostHead_in_store` and
+    --    `Store.updateHead_head_in_store`)
     ```
 
 - [ ] **FC-2: The head descends from the latest justified checkpoint**
