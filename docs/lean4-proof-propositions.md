@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
-| FC | 1 | 4 | 0 | 5 |
+| FC | 2 | 3 | 0 | 5 |
 | VAL | 2 | 3 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **17** | **13** | **1** | **31** |
+| **Total** | **18** | **12** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -332,14 +332,18 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
         att.data.target.slot ≤ att.data.head.slot := by sorry
     ```
 
-- [ ] **FC-4: The fork-choice tree is acyclic**
-  - Source: `Database.add_block` / `parent_root` convention (a structural invariant established at block-insertion time)
-  - Note: Uses `isProperAncestor` (decides whether `a` is a strict ancestor of `b`, i.e. `a ≠ b`) and expresses acyclicity by negating "a block is a strict ancestor of itself".
+- [x] **FC-4: The fork-choice tree is acyclic**
+  - Source: `Database.add_block` / `parent_root` convention (a structural invariant established at block-insertion time; realized as `Store.WellFormed.parentSlotLt` — `on_block` runs the STF, which admits only strictly-future slots)
+  - Note: Uses `isProperAncestor` (decides whether `a` is a strict ancestor of `b`, i.e. `a ≠ b`) and expresses acyclicity by negating "a block is a strict ancestor of itself". Modeled relationally as the inductive `Store.ProperAncestor` (the deciding walk is `checkpointIsAncestor`'s; the acyclicity argument needs the derivation, not the decision procedure).
+  - Proved at: `LeanSpec/Forks/Lstar/Store/Ancestry.lean` (`Store.fork_choice_acyclic`, via `Store.properAncestor_slot_lt` — slots strictly decrease along every parent step)
   - Sample code:
 
     ```lean
     theorem fork_choice_acyclic (st : Store) (hwf : Store.WellFormed st) :
         ∀ b ∈ st.blocks.values, ¬ Store.isProperAncestor st b.root b.root := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Store/Ancestry.lean as
+    --    `Store.fork_choice_acyclic` (blocks are keyed pairs, so the statement
+    --    quantifies `∀ p ∈ st.blocks, ¬ Store.ProperAncestor st p.1 p.1`)
     ```
 
 - [ ] **FC-5: The block-production iteration terminates in finitely many steps**
