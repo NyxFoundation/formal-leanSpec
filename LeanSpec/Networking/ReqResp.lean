@@ -22,12 +22,28 @@ raising lookups, so the skip needs no counterpart. `start_slot + i`
 wraps in `UInt64` where Python's checked `Slot` would raise — a
 divergence only past slot `2^64 - count`.
 
-Proves NET-1 from `docs/lean4-proof-propositions.md`:
+Also mirrors the request reader (`RequestHandler._read_request`): the
+wire format is `[varint_length][snappy_framed_payload]`, the
+attacker-controlled declared length is rejected above
+`MAX_PAYLOAD_SIZE` before any buffer is sized, the compressed input is
+bounded by snappy's worst-case expansion, and a decode succeeds only
+when the decompressed size equals the declared length. The model is
+the reader's terminal state (all wire bytes arrived — the incremental
+chunking is IO), snappy enters as the `decompress` parameter, and the
+upstream `b""` failure sentinel becomes `none`.
+
+Proves NET-1 and NET-2 from `docs/lean4-proof-propositions.md`:
   - NET-1: a `BlocksByRange` response never exceeds the bound — at most
     one block per requested slot, and the request is only served when
     its count is within `MAX_REQUEST_BLOCKS`
     (`blocks_by_range_bounded`: `resp.length ≤ min count
     MAX_REQUEST_BLOCKS`).
+  - NET-2: a decodable payload is no larger than the upper bound —
+    every successfully decoded message has the declared size, and the
+    declared size passed the `MAX_PAYLOAD_SIZE` gate
+    (`payload_size_bound`); the accepted wire bytes are bounded too
+    (`compressed_size_bound`), so a malicious peer cannot make the node
+    buffer unbounded data.
 -/
 
 import LeanSpec.Forks.Lstar.Containers.Block
@@ -135,5 +151,77 @@ theorem blocks_by_range_bounded
           · injection h with h'
             subst h'
             exact filterMap_range_le_min _ _ hmax
+
+/-! ## Request reading (`_read_request`) -/
+
+/-- Read a length-prefixed request, as the terminal state of the
+streaming reader (`_read_request`): the declared varint length is
+rejected above `MAX_PAYLOAD_SIZE` before any buffer is sized (a 10-byte
+varint can claim up to `2^70`), the compressed input is bounded by
+snappy's worst-case expansion (`n + n/6 + 1024`), and the decode
+succeeds only when the decompressed payload has exactly the declared
+length. Failures — upstream's `b""` sentinel, which the caller turns
+into `INVALID_REQUEST` — are `none`. -/
+def readRequest (decompress : ByteArray → Option ByteArray)
+    (declaredLength : Nat) (compressed : ByteArray) :
+    Option ByteArray :=
+  -- Reject an oversized declared length before sizing any buffer.
+  if MAX_PAYLOAD_SIZE < declaredLength then none
+  -- Guard against unbounded compressed data (snappy worst case).
+  else if declaredLength + declaredLength / 6 + 1024 < compressed.size then
+    none
+  else
+    match decompress compressed with
+    | none => none
+    | some decompressed =>
+      -- The decompressed payload must match the declared length.
+      if decompressed.size = declaredLength then some decompressed
+      else none
+
+/-- NET-2: a decodable payload is no larger than the upper bound —
+every successfully read message has exactly the declared size, and the
+declared size passed the `MAX_PAYLOAD_SIZE` gate. Holds for every
+decompressor. -/
+theorem payload_size_bound (decompress : ByteArray → Option ByteArray)
+    (declaredLength : Nat) (compressed : ByteArray) (msg : ByteArray)
+    (h : readRequest decompress declaredLength compressed = some msg) :
+    msg.size ≤ MAX_PAYLOAD_SIZE := by
+  unfold readRequest at h
+  split at h
+  · simp at h
+  · next hgate =>
+    split at h
+    · simp at h
+    · split at h
+      · simp at h
+      · split at h
+        · next hsize =>
+          injection h with h'
+          subst h'
+          omega
+        · simp at h
+
+/-- The wire side of NET-2: the reader never accepts more compressed
+bytes than snappy's worst-case expansion of an in-bound payload, so a
+malicious peer cannot make the node buffer unbounded data. -/
+theorem compressed_size_bound (decompress : ByteArray → Option ByteArray)
+    (declaredLength : Nat) (compressed : ByteArray) (msg : ByteArray)
+    (h : readRequest decompress declaredLength compressed = some msg) :
+    compressed.size ≤
+      MAX_PAYLOAD_SIZE + MAX_PAYLOAD_SIZE / 6 + 1024 := by
+  unfold readRequest at h
+  split at h
+  · simp at h
+  · next hgate =>
+    split at h
+    · simp at h
+    · next hwire =>
+      have h1 : declaredLength ≤ MAX_PAYLOAD_SIZE := Nat.le_of_not_lt hgate
+      have h2 : compressed.size ≤
+          declaredLength + declaredLength / 6 + 1024 :=
+        Nat.le_of_not_lt hwire
+      have h3 : declaredLength / 6 ≤ MAX_PAYLOAD_SIZE / 6 :=
+        Nat.div_le_div_right h1
+      omega
 
 end LeanSpec.Networking

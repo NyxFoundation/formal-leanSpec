@@ -73,10 +73,10 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | ST | 6 | 0 | 0 | 6 |
 | FC | 5 | 0 | 0 | 5 |
 | VAL | 5 | 0 | 0 | 5 |
-| NET | 1 | 1 | 0 | 2 |
+| NET | 2 | 0 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **27** | **3** | **1** | **31** |
+| **Total** | **28** | **2** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -469,15 +469,20 @@ The propositions here guarantee **bound values for DoS resistance**: a `BlocksBy
     --    the handler takes the two configured lookups as parameters)
     ```
 
-- [ ] **NET-2: A decodable payload size is at most the upper bound**
-  - Source: `Codec.decode`
-  - Note: SSZ-decodes a message payload on the req/resp protocol into the `Message` type.
+- [x] **NET-2: A decodable payload size is at most the upper bound**
+  - Source: `Codec.decode` (realized as `RequestHandler._read_request`, `src/lean_spec/node/networking/reqresp/handler.py`: the `[varint_length][snappy_framed_payload]` reader — the attacker-controlled declared length is gated at `MAX_PAYLOAD_SIZE` before any buffer is sized, and a decode succeeds only when the decompressed size equals the declared length)
+  - Note: SSZ-decodes a message payload on the req/resp protocol into the `Message` type. Snappy enters the model as the `decompress` parameter, so the bounds hold for every decompressor.
+  - Proved at: `LeanSpec/Networking/ReqResp.lean` (`payload_size_bound`; the wire-side buffering bound as `compressed_size_bound` — accepted compressed bytes never exceed snappy's worst-case expansion of an in-bound payload)
   - Sample code:
 
     ```lean
     theorem payload_size_bound (payload : ByteArray) (msg : Message)
         (h : Codec.decode payload = .ok msg) :
         payload.size ≤ MAX_PAYLOAD_SIZE := by sorry
+    -- ✅ proved in LeanSpec/Networking/ReqResp.lean as `payload_size_bound`
+    --    (stated on `readRequest`, the reader's pure terminal state; the
+    --    decoded message carries the bound, and `compressed_size_bound`
+    --    bounds the wire bytes)
     ```
 
 ## Storage
