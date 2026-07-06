@@ -74,9 +74,9 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | FC | 5 | 0 | 0 | 5 |
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 2 | 0 | 0 | 2 |
-| STOR | 1 | 1 | 0 | 2 |
+| STOR | 2 | 0 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **29** | **1** | **1** | **31** |
+| **Total** | **30** | **0** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -509,9 +509,10 @@ The propositions here guarantee **chain-structure consistency and write atomicit
     --    `parentsPresent_anchor` / `parentsPresent_insertBlock`)
     ```
 
-- [ ] **STOR-2: Batch writes are atomic**
-  - Source: `Database.batch_write`
-  - Note: Applies multiple writes in a single transaction (atomic guarantee: all-or-nothing).
+- [x] **STOR-2: Batch writes are atomic**
+  - Source: `Database.batch_write` (`src/lean_spec/node/storage/database.py`; deployed in `sqlite.py` — commits on clean exit, rolls back on any exception)
+  - Note: Applies multiple writes in a single transaction (atomic guarantee: all-or-nothing). Modeled as a fold through a working copy: commit returns the fully-written copy, the error path returns no database at all — the caller's pre-batch value is untouched by construction, which is the pure-model rollback. Backend write failures (`sqlite3.Error`) enter as the `writeOk` parameter.
+  - Proved at: `LeanSpec/Storage/Database.lean` (`Database.batch_write_commits` — every write of a committed batch is contained, for batches without key collisions; `Database.batch_atomic` — the catalog disjunction)
   - Sample code (high-level model):
 
     ```lean
@@ -519,6 +520,9 @@ The propositions here guarantee **chain-structure consistency and write atomicit
         (db db' : Database) (ws : List Write) :
         Database.batchWrite db ws = .ok db' →
         (∀ w ∈ ws, db'.contains w) ∨ db' = db := by sorry
+    -- ✅ proved in LeanSpec/Storage/Database.lean as `Database.batch_atomic`
+    --    (with distinct write keys — a later write to the same key
+    --    overwrites — and the backend failure model as a parameter)
     ```
 
 ## Sync
