@@ -32,6 +32,11 @@ function and fork-choice attestation validation:
   - `attestationSlotBeforeHead`         ↔ `ATTESTATION_SLOT_BEFORE_HEAD`
   - `attestationTooFarInFuture`         ↔ `ATTESTATION_TOO_FAR_IN_FUTURE`
   - `unknownParentBlock`                ↔ `UNKNOWN_PARENT_BLOCK`
+  - `blockSlotGapTooLarge`              ↔ `BLOCK_SLOT_GAP_TOO_LARGE`
+  - `blockTooFarInFuture`               ↔ `BLOCK_TOO_FAR_IN_FUTURE`
+                                          (both added by the pending
+                                          leanEthereum/leanSpec#1182,
+                                          fixing issue #1171)
 
 The `STError` name is historical — the state-transition function was
 modeled first; the type now carries every modeled rejection reason, like
@@ -84,6 +89,8 @@ inductive STError where
   | attestationSlotBeforeHead (slot head : Slot) : STError
   | attestationTooFarInFuture (slot maxAdmissible : Nat) : STError
   | unknownParentBlock (root : Root) : STError
+  | blockSlotGapTooLarge (slot parentSlot : Slot) : STError
+  | blockTooFarInFuture (slot : Slot) (maxAdmissible : Nat) : STError
   deriving Repr, BEq, Inhabited
 
 /-- Result of a fallible state-transition step. -/
