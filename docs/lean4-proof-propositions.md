@@ -72,11 +72,11 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
 | FC | 5 | 0 | 0 | 5 |
-| VAL | 4 | 1 | 0 | 5 |
+| VAL | 5 | 0 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **23** | **7** | **1** | **31** |
+| **Total** | **24** | **6** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -386,14 +386,19 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
     --    `ValidatorIndex.proposer_index_round_robin`
     ```
 
-- [ ] **VAL-2: Proposal key and attestation key are distinct**
-  - Source: `proposalKey` / `attestationKey` (ValidatorService)
-  - Note: Each validator manages two separate signing keys, one for block proposal and one for attestations.
+- [x] **VAL-2: Proposal key and attestation key are distinct**
+  - Source: `proposalKey` / `attestationKey` (ValidatorService; realized as the `attestation_secret_key` / `proposal_secret_key` fields of `ValidatorEntry`, `src/lean_spec/node/validator/registry.py`)
+  - Note: Each validator manages two separate signing keys, one for block proposal and one for attestations — documented upstream as "without OTS conflict", but **not enforced**: `ValidatorRegistry.add` assigns without validation and `from_yaml` compares nothing, so a same-key manifest loads silently and one slot's proposal + attestation signatures would consume overlapping XMSS one-time-signature state. Found by attempting this proposition; reported upstream (the "invariant maintained only by convention" class of leanEthereum/leanSpec#1176). The theorem is therefore proved relative to `ValidatorRegistry.WellFormed`.
+  - Proved at: `LeanSpec/Validator/Registry.lean` (`ValidatorRegistry.dual_key_distinct`, relative to `WellFormed`; `WellFormed.add` shows the suggested fix — validate at insertion — preserves the invariant)
   - Sample code:
 
     ```lean
     theorem dual_key_distinct (vid : ValidatorIndex) (reg : KeyRegistry) :
         reg.proposalKey vid ≠ reg.attestationKey vid := by sorry
+    -- ✅ proved in LeanSpec/Validator/Registry.lean as
+    --    `ValidatorRegistry.dual_key_distinct` (relative to
+    --    `ValidatorRegistry.WellFormed` — upstream does not enforce the
+    --    distinctness, so it cannot be derived from construction)
     ```
 
 - [x] **VAL-3: Each slot has exactly one proposer**
