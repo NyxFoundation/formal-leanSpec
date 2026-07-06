@@ -75,8 +75,8 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
-| SYNC | 1 | 1 | 0 | 2 |
-| **Total** | **25** | **5** | **1** | **31** |
+| SYNC | 2 | 0 | 0 | 2 |
+| **Total** | **26** | **4** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -535,12 +535,14 @@ The propositions here guarantee **closure of the FSM and gating of gossip**: the
     --    `transitionTo s n = some s'`)
     ```
 
-- [ ] **SYNC-2: Gossip is accepted only in SYNCING / SYNCED**
-  - Source: `SyncService.accepts_gossip`
+- [x] **SYNC-2: Gossip is accepted only in SYNCING / SYNCED**
+  - Source: `SyncService.accepts_gossip` (realized as the `SyncState.accepts_gossip` property, `src/lean_spec/node/sync/states.py`; every `on_gossip_*` handler in `node/sync/service.py` checks it first)
   - Note: Decides whether the current state accepts gossipsub messages (true only for `SYNCING` or `SYNCED`).
+  - Proved at: `LeanSpec/Sync/States.lean` (`SyncState.accepts_gossip_iff`)
   - Sample code:
 
     ```lean
     theorem accepts_gossip_iff (st : SyncState) :
         SyncService.acceptsGossip st ↔ st = .syncing ∨ st = .synced := by sorry
+    -- ✅ proved in LeanSpec/Sync/States.lean as `SyncState.accepts_gossip_iff`
     ```
