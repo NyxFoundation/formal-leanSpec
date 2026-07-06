@@ -73,10 +73,10 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | ST | 6 | 0 | 0 | 6 |
 | FC | 5 | 0 | 0 | 5 |
 | VAL | 5 | 0 | 0 | 5 |
-| NET | 0 | 2 | 0 | 2 |
+| NET | 1 | 1 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **26** | **4** | **1** | **31** |
+| **Total** | **27** | **3** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -388,7 +388,7 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
 
 - [x] **VAL-2: Proposal key and attestation key are distinct**
   - Source: `proposalKey` / `attestationKey` (ValidatorService; realized as the `attestation_secret_key` / `proposal_secret_key` fields of `ValidatorEntry`, `src/lean_spec/node/validator/registry.py`)
-  - Note: Each validator manages two separate signing keys, one for block proposal and one for attestations — documented upstream as "without OTS conflict", but **not enforced**: `ValidatorRegistry.add` assigns without validation and `from_yaml` compares nothing, so a same-key manifest loads silently and one slot's proposal + attestation signatures would consume overlapping XMSS one-time-signature state. Found by attempting this proposition; reported upstream (the "invariant maintained only by convention" class of leanEthereum/leanSpec#1176). The theorem is therefore proved relative to `ValidatorRegistry.WellFormed`.
+  - Note: Each validator manages two separate signing keys, one for block proposal and one for attestations — documented upstream as "without OTS conflict", but **not enforced**: `ValidatorRegistry.add` assigns without validation and `from_yaml` compares nothing, so a same-key manifest loads silently and one slot's proposal + attestation signatures would consume overlapping XMSS one-time-signature state. Found by attempting this proposition; reported upstream as leanEthereum/leanSpec#1184 (the "invariant maintained only by convention" class of #1176). The theorem is therefore proved relative to `ValidatorRegistry.WellFormed`.
   - Proved at: `LeanSpec/Validator/Registry.lean` (`ValidatorRegistry.dual_key_distinct`, relative to `WellFormed`; `WellFormed.add` shows the suggested fix — validate at insertion — preserves the invariant)
   - Sample code:
 
@@ -453,9 +453,10 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
 
 The propositions here guarantee **bound values for DoS resistance**: a `BlocksByRange` response does not exceed the smaller of the requested `count` and `MAX_REQUEST_BLOCKS`; a decodable payload is no larger than `MAX_PAYLOAD_SIZE`; etc. If these break, a malicious peer can exhaust a node's memory/CPU by sending huge payloads or unbounded responses. Implementations live in `LeanSpec/Networking/*`.
 
-- [ ] **NET-1: BlocksByRange response length never exceeds the bound**
-  - Source: `Handler.handle` (BlocksByRange)
-  - Note: A req/resp handler that receives a `BlocksByRange` request and responds with a list of blocks.
+- [x] **NET-1: BlocksByRange response length never exceeds the bound**
+  - Source: `Handler.handle` (BlocksByRange; realized as `RequestHandler.handle_blocks_by_range`, `src/lean_spec/node/networking/reqresp/handler.py`)
+  - Note: A req/resp handler that receives a `BlocksByRange` request and responds with a list of blocks. Upstream additionally rejects a count of zero, refuses requests below the sliding history window (`MIN_SLOTS_FOR_BLOCK_REQUESTS`), and silently skips empty slots; the configured lookup callbacks enter the model as parameters.
+  - Proved at: `LeanSpec/Networking/ReqResp.lean` (`blocks_by_range_bounded`)
   - Sample code:
 
     ```lean
@@ -463,6 +464,9 @@ The propositions here guarantee **bound values for DoS resistance**: a `BlocksBy
         (req : BlocksByRangeRequest) (resp : List Block)
         (h : Handler.handle req = .ok resp) :
         resp.length ≤ min req.count MAX_REQUEST_BLOCKS := by sorry
+    -- ✅ proved in LeanSpec/Networking/ReqResp.lean as
+    --    `blocks_by_range_bounded` (the wire type is `SignedBlock`, and
+    --    the handler takes the two configured lookups as parameters)
     ```
 
 - [ ] **NET-2: A decodable payload size is at most the upper bound**

@@ -17,7 +17,7 @@ files and decode failures — a same-key manifest loads silently and
 then signs a proposal and an attestation for one slot with one
 stateful XMSS key (OTS state reuse; found by attempting VAL-2, an
 "invariant maintained only by convention" of the same class as
-leanEthereum/leanSpec#1176, reported upstream). The distinctness
+leanEthereum/leanSpec#1176, reported as #1184). The distinctness
 therefore enters as `WellFormed`, and `WellFormed.add` shows the
 suggested fix — validating at insertion — preserves it.
 
