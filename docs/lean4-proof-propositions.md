@@ -74,9 +74,9 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | FC | 5 | 0 | 0 | 5 |
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 2 | 0 | 0 | 2 |
-| STOR | 0 | 2 | 0 | 2 |
+| STOR | 1 | 1 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **28** | **2** | **1** | **31** |
+| **Total** | **29** | **1** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -491,9 +491,10 @@ The propositions here guarantee **bound values for DoS resistance**: a `BlocksBy
 
 The propositions here guarantee **chain-structure consistency and write atomicity**: every block in the store, except genesis, has its parent in the store as well (no orphan blocks; this is a fork-choice precondition); `batch_write` is in only one of two states — fully successful or fully failed (so partial persistence cannot leave state and block references inconsistent); and so on. If these break, the Store becomes corrupted after restart and fork choice cannot run. Implementations live in `LeanSpec/Storage/*`.
 
-- [ ] **STOR-1: Every non-genesis Block has its parent in the store**
-  - Source: `Database.add_block` (parent-existence precondition)
-  - Note: Each block in the store has a parent block root (`parent_root`); for non-genesis blocks the parent must exist in `store.blocks` (the `block_root → Block` map).
+- [x] **STOR-1: Every non-genesis Block has its parent in the store**
+  - Source: `Database.add_block` (parent-existence precondition; no such database method exists in current leanSpec — the gate is `on_block`'s `UNKNOWN_PARENT_BLOCK` rejection in `src/lean_spec/spec/forks/lstar/fork_choice.py`, which runs before `SyncService._persist_block` writes anything)
+  - Note: Each block in the store has a parent block root (`parent_root`); for non-genesis blocks the parent must exist in `store.blocks` (the `block_root → Block` map). The exception generalizes beyond genesis: `create_store` seeds the map with a chain anchor whose parent is outside the tree (zero hash for genesis, an absent block for a checkpoint-sync anchor), so the invariant is stated relative to the anchor root.
+  - Proved at: `LeanSpec/Storage/Blocks.lean` (`Store.parentsPresent_anchor` establishes the invariant at anchoring, `Store.parentsPresent_insertBlock` shows the parent-gated insertion preserves it, and `Store.parent_exists_or_genesis` is the catalog form on a genesis-anchored store)
   - Sample code:
 
     ```lean
@@ -502,6 +503,10 @@ The propositions here guarantee **chain-structure consistency and write atomicit
         (hin : b ∈ st.blocks.values) :
         b.parentRoot = ByteArray.zeroes 32 ∨
         st.blocks.contains b.parentRoot := by sorry
+    -- ✅ proved in LeanSpec/Storage/Blocks.lean as
+    --    `Store.parent_exists_or_genesis` (relative to the
+    --    `ParentsPresent` anchor invariant, established and preserved by
+    --    `parentsPresent_anchor` / `parentsPresent_insertBlock`)
     ```
 
 - [ ] **STOR-2: Batch writes are atomic**
