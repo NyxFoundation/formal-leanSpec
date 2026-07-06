@@ -75,8 +75,8 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
-| SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **24** | **6** | **1** | **31** |
+| SYNC | 1 | 1 | 0 | 2 |
+| **Total** | **25** | **5** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -513,9 +513,10 @@ The propositions here guarantee **chain-structure consistency and write atomicit
 
 The propositions here guarantee **closure of the FSM and gating of gossip**: the implementation's `transition` function never produces transitions outside the four allowed ones; `acceptsGossip ⇔ st ∈ {SYNCING, SYNCED}` (accepting gossip while `IDLE` would re-forward stale/broken payloads and pollute the network); and so on. Implementations live in `LeanSpec/Sync/*`.
 
-- [ ] **SYNC-1: The sync FSM only takes the four permitted transitions**
-  - Source: `SyncService.transition`
-  - Note: Computes the next state of the sync FSM from the current state (one of the four permitted transitions, or `none`).
+- [x] **SYNC-1: The sync FSM only takes the four permitted transitions**
+  - Source: `SyncService.transition` (realized as `SyncService._transition_to`, `src/lean_spec/node/sync/service.py`, over `SyncState` in `node/sync/states.py`)
+  - Note: Computes the next state of the sync FSM from the current state (one of the four permitted transitions, or `none`). Upstream validates a *requested* move rather than computing it — rejecting self-transitions and the `IDLE → SYNCED` shortcut, accepting everything else — which is **stricter** than this relation: `any_to_idle` admits the idle self-loop, `_transition_to` rejects every self-loop (`transitionTo_ne`).
+  - Proved at: `LeanSpec/Sync/States.lean` (`SyncState.transition_sound`; the extra strictness as `SyncState.transitionTo_ne`)
   - Sample code:
 
     ```lean
@@ -529,6 +530,9 @@ The propositions here guarantee **closure of the FSM and gating of gossip**: the
     theorem transition_sound (s s' : SyncState)
         (h : SyncService.transition s = some s') :
         s.canTransitionTo s' := by sorry
+    -- ✅ proved in LeanSpec/Sync/States.lean as `SyncState.transition_sound`
+    --    (the guard takes the requested state as an argument:
+    --    `transitionTo s n = some s'`)
     ```
 
 - [ ] **SYNC-2: Gossip is accepted only in SYNCING / SYNCED**
