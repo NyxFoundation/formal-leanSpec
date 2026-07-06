@@ -72,11 +72,11 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 6 | 0 | 0 | 6 |
 | FC | 5 | 0 | 0 | 5 |
-| VAL | 3 | 2 | 0 | 5 |
+| VAL | 4 | 1 | 0 | 5 |
 | NET | 0 | 2 | 0 | 2 |
 | STOR | 0 | 2 | 0 | 2 |
 | SYNC | 0 | 2 | 0 | 2 |
-| **Total** | **22** | **8** | **1** | **31** |
+| **Total** | **23** | **7** | **1** | **31** |
 
 ## SSZ & primitive types
 
@@ -427,14 +427,19 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
     --    instead of erroring: `attestationDutyStep ... = none`)
     ```
 
-- [ ] **VAL-5: XMSS preparation state is monotonically increasing**
-  - Source: `XMSS.advance_preparation` (called from ValidatorService)
-  - Note: Advances the prepared state of the XMSS secret key (the range of usable one-time keys) by one step. `preparedEnd` is the last index currently prepared.
+- [x] **VAL-5: XMSS preparation state is monotonically increasing**
+  - Source: `XMSS.advance_preparation` (called from ValidatorService; realized as `GeneralizedXmssScheme.advance_preparation`, `src/lean_spec/spec/crypto/xmss/interface.py`, with the window fields on `SecretKey` in `crypto/xmss/containers.py`)
+  - Note: Advances the prepared state of the XMSS secret key (the range of usable one-time keys) by one step. `preparedEnd` is the last index currently prepared. Upstream returns the key **unchanged** once the next window would exceed the activation interval, so the sample's unconditional strict `<` is false as written: the unconditional truth is `≤` (the window never rewinds — the slashing-safety core), with strictness inside the activation interval.
+  - Proved at: `LeanSpec/Validator/Xmss.lean` (`Scheme.advancePreparation_monotone` — unconditional `≤`; `Scheme.advancePreparation_strict_mono` — the catalog's `<` under its true precondition; `Scheme.advancePreparation_exhausted` — fixed point past activation). The Phase-2 tree regeneration is a parameter (Arklib side), so all three hold for every regenerator.
   - Sample code:
 
     ```lean
     theorem xmss_advance_monotone (sk : XMSSSecretKey) :
         sk.preparedEnd < (XMSS.advancePreparation sk).preparedEnd := by sorry
+    -- ✅ proved in LeanSpec/Validator/Xmss.lean as
+    --    `Scheme.advancePreparation_strict_mono` (strict form needs the
+    --    activation interval to still have room; the unconditional half
+    --    is `Scheme.advancePreparation_monotone`, a `≤`)
     ```
 
 ## Networking
