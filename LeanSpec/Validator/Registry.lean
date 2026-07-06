@@ -93,5 +93,45 @@ theorem WellFormed.add (reg : ValidatorRegistry) (entry : ValidatorEntry)
   | inl heq => rw [heq]; exact hentry
   | inr hmem => exact hwf e (List.mem_filter.mp hmem).1
 
+/-! ## Checked insertion (the fix shape of leanEthereum/leanSpec#1184)
+
+Tracks the fix suggested in leanEthereum/leanSpec#1184 (invited by the
+maintainers): reject a same-key entry where the check is one
+comparison, at insertion. Every one-time key of an XMSS secret key
+derives from its master PRF seed, so two keys collide in OTS state
+exactly when their seeds coincide — the check compares the seeds
+(upstream will compare the manifest's two public keys, which
+equivalently fingerprint the seeds). Re-align the shape with the merged
+fix when it lands upstream. -/
+
+/-- Add a validator entry only when its two keys are distinct — the
+load-time validation of leanEthereum/leanSpec#1184. `none` mirrors the
+`ValueError` the loader raises on a same-seed manifest. -/
+def addChecked (reg : ValidatorRegistry) (entry : ValidatorEntry) :
+    Option ValidatorRegistry :=
+  if entry.proposalSecretKey.prfKey.data ==
+      entry.attestationSecretKey.prfKey.data then
+    none
+  else
+    some (reg.add entry)
+
+/-- The checked insertion discharges the `WellFormed` distinctness at
+construction: an accepted entry passed the seed comparison, and keys
+sharing no seed are distinct. Once upstream enforces the check, every
+loaded registry is well-formed by construction — closing the loop the
+way leanEthereum/leanSpec#1179 did for the store invariants. -/
+theorem addChecked_wellFormed (reg reg' : ValidatorRegistry)
+    (entry : ValidatorEntry) (hwf : WellFormed reg)
+    (h : addChecked reg entry = some reg') :
+    WellFormed reg' := by
+  unfold addChecked at h
+  split at h
+  · simp at h
+  · next hne =>
+    injection h with h'
+    subst h'
+    exact WellFormed.add reg entry hwf fun hc =>
+      hne (by rw [hc]; exact beq_self_eq_true _)
+
 end ValidatorRegistry
 end LeanSpec.Validator
