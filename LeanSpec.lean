@@ -16,6 +16,7 @@ import LeanSpec.Forks.Lstar.Slot
 import LeanSpec.Forks.Lstar.StateTransition
 import LeanSpec.Forks.Lstar.Store.Ancestry
 import LeanSpec.Forks.Lstar.Store.BlockProduction
+import LeanSpec.Forks.Lstar.Store.OnBlock
 import LeanSpec.Forks.Lstar.Store.Store
 import LeanSpec.Networking.Config
 import LeanSpec.Networking.ReqResp

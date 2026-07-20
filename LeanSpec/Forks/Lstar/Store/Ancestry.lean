@@ -514,8 +514,9 @@ theorem checkpointIsAncestor_of_ancestorOrEqual {st : Store}
     (Nat.le_trans (slotCount_le st bd.slot) (Nat.le_succ _))
 
 /-- `checkpointIsAncestor` reads only the block map, which `updateHead`
-never touches. -/
-private theorem ancestorWalk_congr {st st' : Store}
+never touches. Public so the FC-7 `on_block` preservation
+(`Store/OnBlock.lean`) can transfer the clause across field rewrites. -/
+theorem ancestorWalk_congr {st st' : Store}
     (hblocks : st'.blocks = st.blocks) (anc : Checkpoint) :
     ∀ (fuel : Nat) (r : Root),
       ancestorWalk st' anc fuel r = ancestorWalk st anc fuel r
@@ -536,7 +537,7 @@ private theorem ancestorWalk_congr {st st' : Store}
         · rfl
         · exact ancestorWalk_congr hblocks anc fuel b.parentRoot
 
-private theorem checkpointIsAncestor_congr {st st' : Store}
+theorem checkpointIsAncestor_congr {st st' : Store}
     (hblocks : st'.blocks = st.blocks) (anc desc : Checkpoint) :
     checkpointIsAncestor st' anc desc = checkpointIsAncestor st anc desc := by
   unfold checkpointIsAncestor

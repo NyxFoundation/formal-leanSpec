@@ -827,6 +827,52 @@ theorem transition_header_slot (s s' : State) (b : Block)
       rw [processAttestations_header _ _ _ h]
       exact process_block_header_slot _ _ _ hh
 
+/-- A successful transition lands the state exactly on the block's slot:
+`processSlots` advances to it and neither the header nor the attestation
+stage moves it. -/
+theorem transition_state_slot (s s' : State) (b : Block)
+    (h : transition s b = .ok s') :
+    s'.slot = b.slot := by
+  unfold transition at h
+  split at h
+  · simp at h
+  · next hn =>
+    unfold processBlock at h
+    split at h
+    · simp at h
+    · next s₁ hh =>
+      have hslots : (processSlots s b.slot).slot = b.slot :=
+        process_slots_advances s b.slot
+          (UInt64.le_of_lt (UInt64.not_le.mp hn))
+      have h₁ : s₁.slot = b.slot := by
+        unfold processBlockHeader at hh
+        split at hh
+        · simp at hh
+        · split at hh
+          · simp at hh
+          · split at hh
+            · simp at hh
+            · split at hh
+              · simp at hh
+              · injection hh with hh'
+                subst hh'
+                exact hslots
+      unfold processAttestations at h
+      dsimp only at h
+      split at h
+      · simp at h
+      · split at h
+        · simp at h
+        · split at h
+          · simp at h
+          · split at h
+            · simp at h
+            · split at h
+              · simp at h
+              · injection h with h'
+                subst h'
+                exact h₁
+
 /-- The full transition preserves `finalized ≤ justified`. -/
 theorem transition_jf (s s' : State) (b : Block)
     (h : transition s b = .ok s')
