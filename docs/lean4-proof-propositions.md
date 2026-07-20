@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 7 | 0 | 0 | 7 |
-| FC | 5 | 0 | 0 | 5 |
+| FC | 6 | 0 | 0 | 6 |
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 2 | 0 | 0 | 2 |
 | STOR | 2 | 0 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **31** | **0** | **1** | **32** |
+| **Total** | **32** | **0** | **1** | **33** |
 
 ## SSZ & primitive types
 
@@ -384,6 +384,23 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
     -- ✅ realized in LeanSpec/Forks/Lstar/Store/BlockProduction.lean:
     --    `selectionLoop` (well-founded recursion, no fuel) and
     --    `build_block_selection_terminates` (pass count ≤ candidates + 1)
+    ```
+
+- [x] **FC-6: `update_head` preserves the store invariants**
+  - Source: `update_head` (`src/lean_spec/spec/forks/lstar/fork_choice.py`; the finalized re-derivation loop, with the `Checkpoint.advance_to` / `Store.latest_finalized` invariant notes of leanEthereum/leanSpec#1182)
+  - Note: `update_head` rewrites only `head` and `latest_finalized`, so five of the six `Store.WellFormed` clauses carry over untouched. The substantive clause is `justifiedDescendsFromFinalized`: the re-derived finalized checkpoint — the head chain's ancestor at the head state's finalized slot — must still sit on the justified chain. Proved from FC-2 (the head descends from the justified root), a descent lemma for the re-derivation walk, comparability of two ancestors of one block (parent links are unique), and completeness of the Boolean `_checkpoint_is_ancestor` walk against the relational ancestry (the fuel argument counts distinct stored blocks at or below the walk's position, which strictly shrinks each step). Two store invariants that `on_block` maintains outside `update_head`'s reach enter as explicit hypotheses rather than growing `WellFormed`: the justified checkpoint records its own block's slot, and no stored post-state finalizes past the store's justified slot (via ST-4).
+  - Proved at: `LeanSpec/Forks/Lstar/Store/Ancestry.lean` (`Store.updateHead_wellFormed`; via `properAncestor_comparable` / `ancestors_comparable`, `descendToSlot_ancestorOrEqual`, `ancestorWalk_complete`, and `checkpointIsAncestor_of_ancestorOrEqual`)
+  - Sample code:
+
+    ```lean
+    theorem updateHead_wellFormed (st : Store) (hwf : Store.WellFormed st)
+        (hjslot : ∀ bj, st.getBlock? st.latestJustified.root = some bj →
+          bj.slot = st.latestJustified.slot)
+        (hdom : ∀ r s₀, st.getState? r = some s₀ →
+          s₀.latestFinalized.slot ≤ st.latestJustified.slot) :
+        Store.WellFormed (Store.updateHead st) := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Store/Ancestry.lean as
+    --    `Store.updateHead_wellFormed`
     ```
 
 ## Validator
