@@ -34,6 +34,7 @@ function and fork-choice attestation validation:
   - `unknownParentBlock`                ↔ `UNKNOWN_PARENT_BLOCK`
   - `blockSlotGapTooLarge`              ↔ `BLOCK_SLOT_GAP_TOO_LARGE`
   - `blockTooFarInFuture`               ↔ `BLOCK_TOO_FAR_IN_FUTURE`
+  - `duplicateAttestationData`          ↔ `DUPLICATE_ATTESTATION_DATA`
                                           (both added by the pending
                                           leanEthereum/leanSpec#1182,
                                           fixing issue #1171)
@@ -91,6 +92,7 @@ inductive STError where
   | unknownParentBlock (root : Root) : STError
   | blockSlotGapTooLarge (slot parentSlot : Slot) : STError
   | blockTooFarInFuture (slot : Slot) (maxAdmissible : Nat) : STError
+  | duplicateAttestationData : STError
   deriving Repr, BEq, Inhabited
 
 /-- Result of a fallible state-transition step. -/

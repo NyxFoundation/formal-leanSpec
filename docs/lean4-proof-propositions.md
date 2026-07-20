@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 7 | 0 | 0 | 7 |
-| FC | 6 | 0 | 0 | 6 |
+| FC | 7 | 0 | 0 | 7 |
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 2 | 0 | 0 | 2 |
 | STOR | 2 | 0 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **32** | **0** | **1** | **33** |
+| **Total** | **33** | **0** | **1** | **34** |
 
 ## SSZ & primitive types
 
@@ -401,6 +401,25 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
         Store.WellFormed (Store.updateHead st) := by sorry
     -- ✅ proved in LeanSpec/Forks/Lstar/Store/Ancestry.lean as
     --    `Store.updateHead_wellFormed`
+    ```
+
+- [x] **FC-7: `on_block` preserves the store invariants**
+  - Source: `on_block` (`src/lean_spec/spec/forks/lstar/fork_choice.py`, post leanEthereum/leanSpec#1182)
+  - Note: Closes the loop FC-6 opened: `on_block` is the mutator that maintains the two side conditions FC-6 consumes, so the composition `on_block → update_head` preserves `Store.WellFormed` together with the new alignment bundle `Store.Aligned` (stored states sit at their block's slot and satisfy ST-4; the justified checkpoint records its block's slot; no stored state finalizes past the store's justified slot). The model (`Store.onBlock`) mirrors the upstream gate sequence — known-block skip, parent-state gate, #1182 gap/horizon guards, duplicate-attestation rejection, STF, import writes, `advance_to`, `update_head`, conditional pruning. Modeled divergences: `hash_tree_root(block)` enters as the `blockRoot` parameter, XMSS signature verification is omitted (Arklib-side; it only rejects more blocks), and pruning is a parameter constrained to leave blocks/states/checkpoints unchanged. Residual hypotheses (documented in the theorem docstring): no stored block already names the incoming root as parent (STOR-1 + hash acyclicity upstream), and — when the STF advances the justified checkpoint — the new checkpoint names an imported block at its own slot and descends from the finalized checkpoint. The latter is the **historical-chain alignment layer** (`historical_block_hashes` mirroring the block map), the next modeling milestone.
+  - Proved at: `LeanSpec/Forks/Lstar/Store/OnBlock.lean` (`Store.onBlock_wellFormed`, via `Store.applyBlock_invariants`; walk stability as `ancestorWalk_extend` / `ancestorWalk_fuel_mono` / `checkpointIsAncestor_applyBlock`; transfer lemmas `wellFormed_congr` / `aligned_congr`; the STF slot lemma as `State.transition_state_slot`)
+  - Sample code:
+
+    ```lean
+    theorem onBlock_wellFormed
+        (prune : Store → Store) (hprune : ...) (st st' : Store)
+        (blockRoot : Root) (b : Block)
+        (hwf : Store.WellFormed st) (hal : Store.Aligned st)
+        (hfreshParent : ∀ p ∈ st.blocks, p.2.parentRoot ≠ blockRoot)
+        (hjnew : ...)
+        (h : Store.onBlock prune st blockRoot b = .ok st') :
+        Store.WellFormed st' ∧ Store.Aligned st' := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Store/OnBlock.lean as
+    --    `Store.onBlock_wellFormed`
     ```
 
 ## Validator
