@@ -26,4 +26,9 @@ deliberately not a whole slot (`GOSSIP_DISPARITY_INTERVALS`, a `Uint64`
 upstream). -/
 def GOSSIP_DISPARITY_INTERVALS : Nat := 1
 
+/-- SSZ limit on the historical-roots list, doubling as the bound on how
+far a block's slot may run beyond its parent
+(`HISTORICAL_ROOTS_LIMIT`, a `Uint64` upstream). -/
+def HISTORICAL_ROOTS_LIMIT : Nat := 2 ^ 18
+
 end LeanSpec.Forks.Lstar
