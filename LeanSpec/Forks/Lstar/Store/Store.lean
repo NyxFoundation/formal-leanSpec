@@ -143,8 +143,9 @@ theorem getBlock?_eq_some_mem {st : Store} {r : Root} {b : Block}
 ancestor checkpoint (the loop of `_checkpoint_is_ancestor`): landing on
 the ancestor's slot decides by root equality, climbing past it without
 landing means the ancestor is off this chain, and leaving the known tree
-ends the search. -/
-private def ancestorWalk (st : Store) (ancestor : Checkpoint) :
+ends the search. Public so the completeness lemma (FC-6,
+`Store/Ancestry.lean`) can reason about each step. -/
+def ancestorWalk (st : Store) (ancestor : Checkpoint) :
     Nat → Root → Bool
   | 0, _ => false
   | fuel + 1, current =>
@@ -395,8 +396,9 @@ def computeLmdGhostHead (st : Store) (startRoot : Root)
 
 /-- Climb from `current` to its ancestor at `finalizedSlot` (the
 finalized re-derivation loop of `update_head`); the walk stops early
-when the parent leaves the known tree. -/
-private def descendToSlot (st : Store) (finalizedSlot : Slot) :
+when the parent leaves the known tree. Public so the descent lemma
+(FC-6, `Store/Ancestry.lean`) can reason about each step. -/
+def descendToSlot (st : Store) (finalizedSlot : Slot) :
     Nat → Root → Root
   | 0, current => current
   | fuel + 1, current =>
