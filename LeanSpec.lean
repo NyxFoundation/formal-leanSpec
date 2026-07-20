@@ -11,11 +11,13 @@ import LeanSpec.Forks.Lstar.Containers.Interval
 import LeanSpec.Forks.Lstar.Containers.State
 import LeanSpec.Forks.Lstar.Containers.Validator
 import LeanSpec.Forks.Lstar.Errors
+import LeanSpec.Forks.Lstar.HistoryAlignment
 import LeanSpec.Forks.Lstar.Reachable
 import LeanSpec.Forks.Lstar.Slot
 import LeanSpec.Forks.Lstar.StateTransition
 import LeanSpec.Forks.Lstar.Store.Ancestry
 import LeanSpec.Forks.Lstar.Store.BlockProduction
+import LeanSpec.Forks.Lstar.Store.ChainAlignment
 import LeanSpec.Forks.Lstar.Store.OnBlock
 import LeanSpec.Forks.Lstar.Store.Store
 import LeanSpec.Networking.Config

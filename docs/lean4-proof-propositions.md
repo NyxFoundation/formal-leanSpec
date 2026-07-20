@@ -71,12 +71,12 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
 | ST | 7 | 0 | 0 | 7 |
-| FC | 7 | 0 | 0 | 7 |
+| FC | 8 | 0 | 0 | 8 |
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 2 | 0 | 0 | 2 |
 | STOR | 2 | 0 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **33** | **0** | **1** | **34** |
+| **Total** | **34** | **0** | **1** | **35** |
 
 ## SSZ & primitive types
 
@@ -420,6 +420,27 @@ The propositions here guarantee **fork-choice consistency**: `compute_head` is d
         Store.WellFormed st' ∧ Store.Aligned st' := by sorry
     -- ✅ proved in LeanSpec/Forks/Lstar/Store/OnBlock.lean as
     --    `Store.onBlock_wellFormed`
+    ```
+
+- [x] **FC-8: Stored histories mirror the block map (the chain-alignment layer)**
+  - Source: `process_block_header` (history append) / `process_attestations` (`lies_on_chain` filter) / `on_block` (import writes); `src/lean_spec/spec/forks/lstar/state_transition.py` and `fork_choice.py`
+  - Note: Discharges the stored half of FC-7's residual `hjnew` hypothesis. STF level (`LeanSpec/Forks/Lstar/HistoryAlignment.lean`): the post-history is the parent history, then the parent root, then one zero hash per skipped slot (`transition_hist`, sized to the block's slot by `transition_hist_size`), and the justified checkpoint moves only onto that history — it stays, anchors at slot 0, or lands at its own slot with a non-zero root (`transition_justified_on_chain`, via the `lies_on_chain` filter). Store level: `Store.ChainAligned` — stored histories are sized to their state's slot, every non-zero entry names a stored block at exactly that slot, and no stored state's justified slot outruns the store's; `on_block` maintains all of it, so an STF-advanced justified checkpoint always names an imported block at its own slot (`applyBlock_justified_stored`). The **descent half** of `hjnew` remains the explicit `hjdesc` hypothesis of `onBlock_invariants`: it is *not* a history fact — a competing fork's state can justify a checkpoint off the finalized subtree unless a 2/3-quorum argument (accountable safety) excludes conflicting supermajorities. That quorum layer is the catalog's known open frontier.
+  - Proved at: `LeanSpec/Forks/Lstar/HistoryAlignment.lean` (STF lemmas) and `LeanSpec/Forks/Lstar/Store/ChainAlignment.lean` (`Store.ChainAligned`, `Store.applyBlock_chainAligned`, `Store.applyBlock_justified_stored`, `Store.onBlock_invariants`)
+  - Sample code:
+
+    ```lean
+    theorem onBlock_invariants
+        (prune : Store → Store) (hprune : ...) (st st' : Store)
+        (blockRoot : Root) (b : Block)
+        (hwf : Store.WellFormed st) (hal : Store.Aligned st)
+        (hcal : Store.ChainAligned st)
+        (hfreshParent : ∀ p ∈ st.blocks, p.2.parentRoot ≠ blockRoot)
+        (hjdesc : ...)  -- the quorum-level descent assumption
+        (h : Store.onBlock prune st blockRoot b = .ok st') :
+        Store.WellFormed st' ∧ Store.Aligned st' ∧
+        Store.ChainAligned st' := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/Store/ChainAlignment.lean as
+    --    `Store.onBlock_invariants`
     ```
 
 ## Validator
