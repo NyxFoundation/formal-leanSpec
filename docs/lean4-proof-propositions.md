@@ -70,13 +70,13 @@ Format: `<DOMAIN>-<number>`. `DOMAIN` is the abbreviation of the owning area:
 |---|---:|---:|---:|---:|
 | SSZ | 6 | 0 | 1 | 7 |
 | CONT | 2 | 0 | 0 | 2 |
-| ST | 6 | 0 | 0 | 6 |
+| ST | 7 | 0 | 0 | 7 |
 | FC | 5 | 0 | 0 | 5 |
 | VAL | 5 | 0 | 0 | 5 |
 | NET | 2 | 0 | 0 | 2 |
 | STOR | 2 | 0 | 0 | 2 |
 | SYNC | 2 | 0 | 0 | 2 |
-| **Total** | **30** | **0** | **1** | **31** |
+| **Total** | **31** | **0** | **1** | **32** |
 
 ## SSZ & primitive types
 
@@ -284,6 +284,25 @@ The propositions here guarantee that **the STF advances state as expected**: aft
         s.latestFinalized.slot ≤ s'.latestFinalized.slot := by sorry
     -- ✅ proved in LeanSpec/Forks/Lstar/StateTransition.lean as
     --    `State.finalization_irreversible` (with `hwf : AnchorWF s`)
+    ```
+
+- [x] **ST-7: Checkpoint replacement is strictly forward (no same-slot root swap)**
+  - Source: `process_attestations` / `process_block_header` (the `Checkpoint.advance_to` strict slot comparison and the `finalized < source.slot` finalization guard; `src/lean_spec/spec/forks/lstar/state_transition.py`)
+  - Note: ST-3/ST-6 bound only the checkpoint **slots** — they would still admit a transition that swaps `latest_justified` / `latest_finalized` to a different root at the same slot. This proposition closes that gap at the STF level: a successful transition either leaves each checkpoint unchanged **as a whole value (root included)** or replaces it with one at a strictly higher slot. The one designed exception is genesis anchoring (the first block force-assigns both checkpoints to its parent root at slot 0, filling in the genesis root), excluded by the `latestBlockHeader.slot ≠ 0` hypothesis. Cross-branch root *ancestry* is deliberately not an STF property — upstream leanEthereum/leanSpec#1182 documents on `Checkpoint.advance_to` that "selection is by slot only" and on `Store.latest_finalized` that the ancestry is a separate store invariant (future FC work).
+  - Proved at: `LeanSpec/Forks/Lstar/CheckpointForward.lean` (`State.checkpoint_forward`; per-phase lemmas `applyJustification_forward`, `processAttestation_forward`, `processAttestations_forward`, and `processBlockHeader_checkpoints_of_ne_zero`)
+  - Sample code:
+
+    ```lean
+    theorem checkpoint_forward
+        (s s' : State) (b : Block)
+        (hnz : s.latestBlockHeader.slot ≠ 0)
+        (h : State.transition s b = .ok s') :
+        (s'.latestJustified = s.latestJustified ∨
+          s.latestJustified.slot < s'.latestJustified.slot) ∧
+        (s'.latestFinalized = s.latestFinalized ∨
+          s.latestFinalized.slot < s'.latestFinalized.slot) := by sorry
+    -- ✅ proved in LeanSpec/Forks/Lstar/CheckpointForward.lean as
+    --    `State.checkpoint_forward`
     ```
 
 ## Fork Choice
