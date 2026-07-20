@@ -1,4 +1,5 @@
 import LeanSpec.Aliases
+import LeanSpec.Forks.Lstar.CheckpointForward
 import LeanSpec.Forks.Lstar.Config
 import LeanSpec.Forks.Lstar.Containers.Aggregation
 import LeanSpec.Forks.Lstar.Containers.Attestation
