@@ -1,6 +1,6 @@
 ---
 title: leanSpec → Lean4 Theorem Proving Proposition Catalog
-last_updated: 2026-07-05
+last_updated: 2026-07-20
 tags:
   - lean4
   - formal-verification
@@ -388,8 +388,8 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
 
 - [x] **VAL-2: Proposal key and attestation key are distinct**
   - Source: `proposalKey` / `attestationKey` (ValidatorService; realized as the `attestation_secret_key` / `proposal_secret_key` fields of `ValidatorEntry`, `src/lean_spec/node/validator/registry.py`)
-  - Note: Each validator manages two separate signing keys, one for block proposal and one for attestations — documented upstream as "without OTS conflict", but **not enforced**: `ValidatorRegistry.add` assigns without validation and `from_yaml` compares nothing, so a same-key manifest loads silently and one slot's proposal + attestation signatures would consume overlapping XMSS one-time-signature state. Found by attempting this proposition; reported upstream as leanEthereum/leanSpec#1184 (the "invariant maintained only by convention" class of #1176). The theorem is therefore proved relative to `ValidatorRegistry.WellFormed`.
-  - Proved at: `LeanSpec/Validator/Registry.lean` (`ValidatorRegistry.dual_key_distinct`, relative to `WellFormed`; `WellFormed.add` shows the suggested fix — validate at insertion — preserves the invariant)
+  - Note: Each validator manages two separate signing keys, one for block proposal and one for attestations — documented upstream as "without OTS conflict". Originally **not enforced** (`ValidatorRegistry.add` assigned without validation, `from_yaml` compared nothing, so a same-key manifest loaded silently and one slot's proposal + attestation signatures would consume overlapping XMSS one-time-signature state); found by attempting this proposition and reported upstream as leanEthereum/leanSpec#1184 (the "invariant maintained only by convention" class of #1176). **Enforced since leanEthereum/leanSpec#1185**: the loader rejects a manifest whose two public keys coincide, before touching secret bytes, so every loaded registry satisfies `WellFormed` by construction.
+  - Proved at: `LeanSpec/Validator/Registry.lean` (`ValidatorRegistry.dual_key_distinct`, relative to `WellFormed`; `WellFormed.add` shows unchecked insertion preserves the invariant; `addChecked` mirrors the merged #1185 public-key check with the derivation as a parameter — `addChecked_wellFormed` for every derivation, `addChecked_seed_distinct` for seed-fingerprinting ones)
   - Sample code:
 
     ```lean
@@ -397,8 +397,9 @@ The propositions here guarantee **duty correctness and slashing prevention**: pr
         reg.proposalKey vid ≠ reg.attestationKey vid := by sorry
     -- ✅ proved in LeanSpec/Validator/Registry.lean as
     --    `ValidatorRegistry.dual_key_distinct` (relative to
-    --    `ValidatorRegistry.WellFormed` — upstream does not enforce the
-    --    distinctness, so it cannot be derived from construction)
+    --    `ValidatorRegistry.WellFormed` — established at load time by
+    --    upstream since leanEthereum/leanSpec#1185, mirrored as
+    --    `addChecked_wellFormed`)
     ```
 
 - [x] **VAL-3: Each slot has exactly one proposer**
